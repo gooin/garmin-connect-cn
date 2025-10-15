@@ -67,6 +67,7 @@ export class HttpClient {
     oauth1Token: IOauth1Token | undefined;
     oauth2Token: IOauth2Token | undefined;
     OAUTH_CONSUMER: IOauth1Consumer | undefined;
+    mfaManager: MFAManager;
 
     constructor(url: UrlClass, config: GCConfig) {
         const jar = new CookieJar();
@@ -86,6 +87,8 @@ export class HttpClient {
             })
         );
         this.config = config;
+        const mfaStorageDir = config.mfaStorageDir || './shared-mfa-sessions';
+        this.mfaManager = MFAManager.getInstance(mfaStorageDir);
         this.setupInterceptors();
     }
 

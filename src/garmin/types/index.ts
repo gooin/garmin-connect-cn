@@ -16,6 +16,7 @@ export type GCCredentials = {
 export type GCHttpClientConfig = {
     timeout?: number;
     domain?: GarminDomain;
+    mfaStorageDir?: string;
 };
 
 export type EventCallback<T> = (data: T) => void;
