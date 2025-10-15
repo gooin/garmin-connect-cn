@@ -23,8 +23,10 @@ export class MFAManager {
      */
     public static getInstance(): MFAManager {
         if (!MFAManager.instance) {
+            console.log('创建MFA管理器实例');
             MFAManager.instance = new MFAManager();
         }
+        console.log('返回MFA管理器实例');
         return MFAManager.instance;
     }
 
@@ -80,7 +82,7 @@ export class MFAManager {
 
         // 解决Promise
         request.resolve(code);
-        console.log(`MFA验证码已提交: ${sessionId}`);
+        console.log(`MFA验证码已提交: code ${code}, sessionId ${sessionId}`);
         return true;
     }
 

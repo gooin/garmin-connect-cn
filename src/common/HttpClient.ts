@@ -304,7 +304,6 @@ export class HttpClient {
     async login(
         username: string,
         password: string,
-        mfaCallback?: () => Promise<string>,
         sessionId?: string
     ): Promise<HttpClient> {
         try {
@@ -315,7 +314,6 @@ export class HttpClient {
             const ticket = await this.getLoginTicket(
                 username,
                 password,
-                mfaCallback,
                 sessionId
             );
 
@@ -343,7 +341,6 @@ export class HttpClient {
     private async getLoginTicket(
         username: string,
         password: string,
-        mfaCallback?: () => Promise<string>,
         sessionId?: string
     ): Promise<string> {
         // 准备登录参数
@@ -373,12 +370,9 @@ export class HttpClient {
         if (this.isMFARequired(pageTitle)) {
             // 如果提供了sessionId，则使用分步登录模式
             if (sessionId) {
-                // 生成一个唯一的MFA会话ID
-                const mfaSessionId = `mfa_${sessionId}_${Date.now()}`;
-
                 // 等待外部提供验证码
                 const mfaCode = await MFAManager.getInstance().waitForMFACode(
-                    mfaSessionId
+                    sessionId
                 );
 
                 // 使用获取到的验证码完成MFA验证
@@ -386,13 +380,6 @@ export class HttpClient {
                     signinResult,
                     loginParams.step3Params,
                     mfaCode
-                );
-            } else if (mfaCallback) {
-                // 使用传统的回调方式
-                signinResult = await this.handleMFA(
-                    signinResult,
-                    loginParams.step3Params,
-                    mfaCallback
                 );
             } else {
                 throw new Error('需要MFA验证，但未提供验证码获取方式');
