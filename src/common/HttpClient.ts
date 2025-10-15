@@ -18,6 +18,8 @@ import {
     IOauth2Token
 } from '../garmin/types';
 import crypto from 'node:crypto';
+import { CookieJar } from 'tough-cookie';
+import { wrapper } from 'axios-cookiejar-support';
 
 const CSRF_RE = new RegExp('name="_csrf"\\s+value="(.+?)"');
 const TICKET_RE = new RegExp('ticket=([^"]+)"');
@@ -53,29 +55,59 @@ export class HttpClient {
     OAUTH_CONSUMER: IOauth1Consumer | undefined;
 
     constructor(url: UrlClass, config: GCConfig) {
+        const jar = new CookieJar();
         this.url = url;
-        this.client = axios.create({
-            timeout: config?.timeout ?? 5000,
-            timeoutErrorMessage: `Request Timeout: > ${
-                config?.timeout ?? 5000
-            } ms`
-
-            /**
-             * Charles debugger: uncomment `proxy` and `httpsAgent`, then run bellow command.
-             * NODE_TLS_REJECT_UNAUTHORIZED=0  node test/sync.js
-             */
-            // proxy: {
-            //     host: '127.0.0.1',
-            //     port: 8888,
-            //     protocol: 'http'
-            // },
-            // httpsAgent: new (require('https').Agent)({
-            //     rejectUnauthorized: false
-            // })
-        });
+        this.client = wrapper(
+            axios.create({
+                timeout: config?.timeout ?? 5000,
+                timeoutErrorMessage: `Request Timeout: > ${
+                    config?.timeout ?? 5000
+                } ms`,
+                maxRedirects: 10,
+                validateStatus: function (status) {
+                    return status >= 200 && status < 400;
+                },
+                withCredentials: true, // 启用cookie自动处理
+                jar: jar
+            })
+        );
         this.config = config;
         this.client.interceptors.response.use(
-            (response) => response,
+            (response) => {
+                // 跟踪重定向过程
+                if (
+                    response.config.url?.includes('signin') ||
+                    response.config.url?.includes('verifyMFA')
+                ) {
+                    console.log('> 响应跟踪 - URL:', response.config.url);
+                    console.log('响应跟踪 - 状态码:', response.status);
+                    console.log(
+                        '响应跟踪 - 最终URL:',
+                        response.request?.responseURL || response.config.url
+                    );
+                    console.log(
+                        '响应跟踪 - 重定向次数:',
+                        response.request?.redirectCount || 0
+                    );
+
+                    // 检查是否有Location头
+                    if (response.headers.location) {
+                        console.log(
+                            '响应跟踪 - Location头:',
+                            response.headers.location
+                        );
+                    }
+
+                    // 检查响应头中可能的重定向信息
+                    if (response.status >= 300 && response.status < 400) {
+                        console.log(
+                            '响应跟踪 - 检测到重定向状态码:',
+                            response.status
+                        );
+                    }
+                }
+                return response;
+            },
             async (error) => {
                 if (
                     axios.isAxiosError(error) &&
@@ -211,10 +243,18 @@ export class HttpClient {
      * @param password
      * @returns {Promise<HttpClient>}
      */
-    async login(username: string, password: string): Promise<HttpClient> {
+    async login(
+        username: string,
+        password: string,
+        mfaCallback?: () => Promise<string>
+    ): Promise<HttpClient> {
         await this.fetchOauthConsumer();
         // Step1-3: Get ticket from page.
-        const ticket = await this.getLoginTicket(username, password);
+        const ticket = await this.getLoginTicket(
+            username,
+            password,
+            mfaCallback
+        );
         // Step4: Oauth1
         const oauth1 = await this.getOauth1Token(ticket);
         // TODO: Handle MFA
@@ -226,7 +266,8 @@ export class HttpClient {
 
     private async getLoginTicket(
         username: string,
-        password: string
+        password: string,
+        mfaCallback?: () => Promise<string>
     ): Promise<string> {
         // Step1: Set cookie
         const step1Params = {
@@ -256,7 +297,7 @@ export class HttpClient {
             throw new Error('login - csrf not found');
         }
         const csrf_token = csrfRegResult[1];
-        // console.log('login - csrf:', csrf_token);
+        console.log('🚀 - getLoginTicket - csrf:', csrf_token);
 
         // Step3 Get ticket
         const signinParams = {
@@ -271,27 +312,34 @@ export class HttpClient {
             redirectAfterAccountCreationUrl: this.url.GARMIN_SSO_EMBED
         };
         const step3Url = `${this.url.SIGNIN_URL}?${qs.stringify(signinParams)}`;
-        // console.log('login - step3Url:', step3Url);
+        console.log('🚀 - getLoginTicket - step3Url:', step3Url);
         const step3Form = new FormData();
         step3Form.append('username', username);
         step3Form.append('password', password);
         step3Form.append('embed', 'true');
         step3Form.append('_csrf', csrf_token);
-        const step3Result = await this.post<string>(step3Url, step3Form, {
+        let signinResult = '';
+        signinResult = await this.post<string>(step3Url, step3Form, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 Dnt: 1,
                 Origin: this.url.GARMIN_SSO_ORIGIN,
                 Referer: this.url.SIGNIN_URL,
-                'User-Agent': USER_AGENT_BROWSER
+                'User-Agent': USER_AGENT_CONNECTMOBILE
             }
         });
-        // console.log('step3Result:', step3Result)
-        this.handleAccountLocked(step3Result);
-        this.handlePageTitle(step3Result);
-        this.handleMFA(step3Result);
+        this.handleAccountLocked(signinResult);
+        const title = this.handlePageTitle(signinResult);
+        if (title.toLowerCase().includes('mfa')) {
+            console.log('🚀 - getLoginTicket - MFA required:', title);
+            signinResult = await this.handleMFA(
+                signinResult,
+                signinParams,
+                mfaCallback
+            );
+        }
 
-        const ticketRegResult = TICKET_RE.exec(step3Result);
+        const ticketRegResult = TICKET_RE.exec(signinResult);
         if (!ticketRegResult) {
             throw new Error(
                 'login failed (Ticket not found or MFA), please check username and password'
@@ -301,15 +349,88 @@ export class HttpClient {
         return ticket;
     }
 
-    // TODO: Handle MFA
-    handleMFA(htmlStr: string): void {}
+    async handleMFA(
+        htmlStr: string,
+        signinParams: Record<string, any>,
+        mfaCallback?: () => Promise<string>
+    ): Promise<string> {
+        if (!mfaCallback) {
+            throw new Error(
+                'login failed (MFA required), please provide MFA callback'
+            );
+        }
+        // 提取CSRF令牌
+        const csrfToken = this.extractCsrfToken(htmlStr);
+        console.log('🚀 - handleMFA - csrfToken:', csrfToken);
+        if (!csrfToken) {
+            throw new Error('无法从MFA页面提取CSRF令牌');
+        }
+        const mfaCode = await mfaCallback();
+        console.log('🚀 - handleMFA - mfaCode:', mfaCode);
+
+        // 处理MFA验证 - 使用FormData方式，与旧版本一致
+        const SSO = this.url.GARMIN_SSO;
+        const mfaForm = new FormData();
+        mfaForm.append('mfa-code', mfaCode);
+        mfaForm.append('embed', 'true');
+        mfaForm.append('_csrf', csrfToken);
+
+        const mfaResult = await this.post<string>(
+            `${SSO}/verifyMFA/loginEnterMfaCode`,
+            mfaForm,
+            {
+                params: signinParams, // 将signinParams作为查询参数
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    Dnt: 1,
+                    Origin: this.url.GARMIN_SSO_ORIGIN,
+                    Referer: `${SSO}/signin`, // 设置正确的Referer
+                    'User-Agent': USER_AGENT_BROWSER
+                },
+                maxRedirects: 10, // 确保跟随重定向
+                // 添加响应拦截器，确保获取重定向后的最终响应
+                transformResponse: [
+                    function (data, headers) {
+                        // 检查是否有重定向
+                        if (
+                            headers.location &&
+                            headers.location.includes('logintoken')
+                        ) {
+                            console.log(
+                                '检测到重定向到包含logintoken的URL:',
+                                headers.location
+                            );
+                        }
+                        return data;
+                    }
+                ]
+            }
+        );
+
+        console.log('MFA验证完成:', mfaResult);
+        const pageTitle = this.handlePageTitle(mfaResult);
+        console.log('MFA验证后的页面标题:', pageTitle);
+        // 保存MFA验证响应用于调试
+        return mfaResult;
+    }
+
+    /**
+     * 从HTML中提取CSRF令牌
+     * @param html HTML字符串
+     * @returns CSRF令牌或null
+     */
+    extractCsrfToken(html: string): string | null {
+        const match = CSRF_RE.exec(html);
+        return match ? match[1] : null;
+    }
 
     // TODO: Handle Phone number
-    handlePageTitle(htmlStr: string): void {
+    handlePageTitle(htmlStr: string): string {
         const pageTitileRegResult = PAGE_TITLE_RE.exec(htmlStr);
         if (pageTitileRegResult) {
             const title = pageTitileRegResult[1];
             console.log('login page title:', title);
+
             if (_.includes(title, 'Update Phone Number')) {
                 // current I don't know where to update it
                 // See:  https://github.com/matin/garth/issues/19
@@ -317,6 +438,9 @@ export class HttpClient {
                     'login failed (Update Phone number), please update your phone number, See:  https://github.com/matin/garth/issues/19'
                 );
             }
+            return title;
+        } else {
+            throw new Error('login failed (Page title not found)');
         }
     }
 
