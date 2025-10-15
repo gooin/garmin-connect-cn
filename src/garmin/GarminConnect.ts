@@ -71,7 +71,8 @@ export default class GarminConnect {
     async login(
         username?: string,
         password?: string,
-        mfaCallback?: () => Promise<string>
+        mfaCallback?: () => Promise<string>,
+        sessionId?: string
     ): Promise<GarminConnect> {
         if (username && password) {
             this.config.username = username;
@@ -80,7 +81,8 @@ export default class GarminConnect {
         await this.client.login(
             this.config.username,
             this.config.password,
-            mfaCallback
+            mfaCallback,
+            sessionId
         );
         return this;
     }

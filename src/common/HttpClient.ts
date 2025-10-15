@@ -9,6 +9,7 @@ import _ from 'lodash';
 import { DateTime } from 'luxon';
 import OAuth from 'oauth-1.0a';
 import qs from 'qs';
+import { MFAManager } from './MFAManager';
 import { UrlClass } from '../garmin/UrlClass';
 import {
     GCConfig,
@@ -297,12 +298,14 @@ export class HttpClient {
      * @param username 用户名
      * @param password 密码
      * @param mfaCallback MFA验证回调函数
+     * @param sessionId 会话ID，用于分步登录
      * @returns Promise<HttpClient>
      */
     async login(
         username: string,
         password: string,
-        mfaCallback?: () => Promise<string>
+        mfaCallback?: () => Promise<string>,
+        sessionId?: string
     ): Promise<HttpClient> {
         try {
             // 准备登录
@@ -312,7 +315,8 @@ export class HttpClient {
             const ticket = await this.getLoginTicket(
                 username,
                 password,
-                mfaCallback
+                mfaCallback,
+                sessionId
             );
 
             // 获取OAuth1令牌
@@ -333,12 +337,14 @@ export class HttpClient {
      * @param username 用户名
      * @param password 密码
      * @param mfaCallback MFA验证回调函数
+     * @param sessionId 会话ID，用于分步登录
      * @returns 登录票据
      */
     private async getLoginTicket(
         username: string,
         password: string,
-        mfaCallback?: () => Promise<string>
+        mfaCallback?: () => Promise<string>,
+        sessionId?: string
     ): Promise<string> {
         // 准备登录参数
         const loginParams = this.prepareLoginParams();
@@ -365,12 +371,32 @@ export class HttpClient {
 
         // 如果需要MFA，执行MFA验证
         if (this.isMFARequired(pageTitle)) {
-            // console.log('🚀 - getLoginTicket - MFA required:', pageTitle);
-            signinResult = await this.handleMFA(
-                signinResult,
-                loginParams.step3Params,
-                mfaCallback
-            );
+            // 如果提供了sessionId，则使用分步登录模式
+            if (sessionId) {
+                // 生成一个唯一的MFA会话ID
+                const mfaSessionId = `mfa_${sessionId}_${Date.now()}`;
+
+                // 等待外部提供验证码
+                const mfaCode = await MFAManager.getInstance().waitForMFACode(
+                    mfaSessionId
+                );
+
+                // 使用获取到的验证码完成MFA验证
+                signinResult = await this.handleMFAWithCode(
+                    signinResult,
+                    loginParams.step3Params,
+                    mfaCode
+                );
+            } else if (mfaCallback) {
+                // 使用传统的回调方式
+                signinResult = await this.handleMFA(
+                    signinResult,
+                    loginParams.step3Params,
+                    mfaCallback
+                );
+            } else {
+                throw new Error('需要MFA验证，但未提供验证码获取方式');
+            }
         }
 
         // 提取票据
@@ -484,6 +510,40 @@ export class HttpClient {
     private extractTicket(signinResult: string): string | null {
         const ticketRegResult = TICKET_RE.exec(signinResult);
         return ticketRegResult ? ticketRegResult[1] : null;
+    }
+
+    /**
+     * 处理MFA验证（使用直接提供的验证码）
+     * @param htmlStr HTML响应字符串
+     * @param signinParams 登录参数
+     * @param mfaCode MFA验证码
+     * @returns MFA验证后的响应字符串
+     */
+    async handleMFAWithCode(
+        htmlStr: string,
+        signinParams: Record<string, any>,
+        mfaCode: string
+    ): Promise<string> {
+        try {
+            // 提取CSRF令牌
+            const csrfToken = this.extractCsrfToken(htmlStr);
+            if (!csrfToken) {
+                throw new Error('MFA验证 - 未找到CSRF令牌');
+            }
+
+            // 提交MFA验证码
+            const mfaResult = await this.submitMFACode(
+                csrfToken,
+                mfaCode,
+                signinParams
+            );
+
+            // 验证MFA结果
+            return this.validateMFAResult(mfaResult);
+        } catch (error) {
+            console.error('MFA验证失败:', error);
+            throw new Error(`MFA验证失败: ${error}`);
+        }
     }
 
     /**
