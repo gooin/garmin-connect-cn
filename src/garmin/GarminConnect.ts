@@ -68,12 +68,20 @@ export default class GarminConnect {
         this.client = new HttpClient(this.url, config);
     }
 
-    async login(username?: string, password?: string): Promise<GarminConnect> {
+    async login(
+        username?: string,
+        password?: string,
+        mfaCallback?: () => Promise<string>
+    ): Promise<GarminConnect> {
         if (username && password) {
             this.config.username = username;
             this.config.password = password;
         }
-        await this.client.login(this.config.username, this.config.password);
+        await this.client.login(
+            this.config.username,
+            this.config.password,
+            mfaCallback
+        );
         return this;
     }
     async exportTokenToFile(dirPath: string): Promise<void> {
