@@ -21,28 +21,57 @@ import crypto from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
 import { wrapper } from 'axios-cookiejar-support';
 
+// 正则表达式常量
 const CSRF_RE = new RegExp('name="_csrf"\\s+value="(.+?)"');
 const TICKET_RE = new RegExp('ticket=([^"]+)"');
 const ACCOUNT_LOCKED_RE = new RegExp('var statuss*=s*"([^"]*)"');
 const PAGE_TITLE_RE = new RegExp('<title>([^<]*)</title>');
 
+// 用户代理常量
 const USER_AGENT_CONNECTMOBILE = 'com.garmin.android.apps.connectmobile';
 const USER_AGENT_BROWSER =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36';
 const USER_AGENT_BROWSER_MAC =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+// URL常量
 const OAUTH_CONSUMER_URL =
     'https://thegarth.s3.amazonaws.com/oauth_consumer.json';
 
+// 登录步骤常量
+const LOGIN_STEPS = {
+    SET_COOKIE: 1,
+    GET_CSRF: 2,
+    SUBMIT_CREDENTIALS: 3,
+    HANDLE_MFA: 4,
+    GET_OAUTH1: 5,
+    EXCHANGE_TOKEN: 6
+} as const;
+
+// HTTP状态码常量
+const HTTP_STATUS = {
+    UNAUTHORIZED: 401
+} as const;
+
+// 类型定义
 interface RefreshSubscriber {
     resolve: (token: string) => void;
     reject: (error: any) => void;
 }
 
-const HTTP_STATUS = {
-    UNAUTHORIZED: 401
-} as const;
+interface LoginStepParams {
+    step1Params: Record<string, any>;
+    step2Params: Record<string, any>;
+    step3Params: Record<string, any>;
+}
 
+interface MFAResponse {
+    success: boolean;
+    ticket?: string;
+    error?: string;
+}
+
+// 全局变量
 let tokenRefreshPromise: Promise<void> | null = null;
 let refreshSubscribers: RefreshSubscriber[] = [];
 
@@ -72,89 +101,25 @@ export class HttpClient {
             })
         );
         this.config = config;
+        this.setupInterceptors();
+    }
+
+    /**
+     * 设置请求和响应拦截器
+     */
+    private setupInterceptors(): void {
+        // 响应拦截器
         this.client.interceptors.response.use(
             (response) => {
-                // 跟踪重定向过程
-                if (
-                    response.config.url?.includes('signin') ||
-                    response.config.url?.includes('verifyMFA')
-                ) {
-                    console.log('> 响应跟踪 - URL:', response.config.url);
-                    console.log('响应跟踪 - 状态码:', response.status);
-                    console.log(
-                        '响应跟踪 - 最终URL:',
-                        response.request?.responseURL || response.config.url
-                    );
-                    console.log(
-                        '响应跟踪 - 重定向次数:',
-                        response.request?.redirectCount || 0
-                    );
-
-                    // 检查是否有Location头
-                    if (response.headers.location) {
-                        console.log(
-                            '响应跟踪 - Location头:',
-                            response.headers.location
-                        );
-                    }
-
-                    // 检查响应头中可能的重定向信息
-                    if (response.status >= 300 && response.status < 400) {
-                        console.log(
-                            '响应跟踪 - 检测到重定向状态码:',
-                            response.status
-                        );
-                    }
-                }
+                // this.logResponseTracking(response);
                 return response;
             },
             async (error) => {
-                if (
-                    axios.isAxiosError(error) &&
-                    error.code === 'ECONNABORTED'
-                ) {
-                    throw new Error(error.message || 'Request Timeout');
-                }
-
-                const originalRequest = error.config;
-
-                if (
-                    error?.response?.status === HTTP_STATUS.UNAUTHORIZED &&
-                    !originalRequest?._retry
-                ) {
-                    if (!this.oauth2Token) {
-                        throw new Error('No OAuth2 token available');
-                    }
-
-                    originalRequest._retry = true;
-
-                    try {
-                        if (!tokenRefreshPromise) {
-                            tokenRefreshPromise =
-                                this.refreshOauth2Token().finally(() => {
-                                    tokenRefreshPromise = null;
-                                });
-                        }
-
-                        await tokenRefreshPromise;
-
-                        originalRequest.headers.Authorization = `Bearer ${this.oauth2Token.access_token}`;
-                        return this.client(originalRequest);
-                    } catch (err) {
-                        console.error('Token refresh failed:', err);
-                        throw err;
-                    }
-                }
-
-                if (axios.isAxiosError(error) && error.response) {
-                    this.handleError(error.response);
-                } else {
-                    // 处理没有response的情况
-                    throw new Error('Network error or unknown error occurred');
-                }
-                throw error;
+                return this.handleResponseError(error);
             }
         );
+
+        // 请求拦截器
         this.client.interceptors.request.use(async (config) => {
             if (this.oauth2Token) {
                 config.headers.Authorization =
@@ -164,7 +129,89 @@ export class HttpClient {
         });
     }
 
-    async fetchOauthConsumer() {
+    /**
+     * 记录响应跟踪信息
+     */
+    private logResponseTracking(response: AxiosResponse): void {
+        if (
+            response.config.url?.includes('signin') ||
+            response.config.url?.includes('verifyMFA')
+        ) {
+            console.log('> 响应跟踪 - URL:', response.config.url);
+            console.log('响应跟踪 - 状态码:', response.status);
+            console.log(
+                '响应跟踪 - 最终URL:',
+                response.request?.responseURL || response.config.url
+            );
+            console.log(
+                '响应跟踪 - 重定向次数:',
+                response.request?.redirectCount || 0
+            );
+
+            if (response.headers.location) {
+                console.log(
+                    '响应跟踪 - Location头:',
+                    response.headers.location
+                );
+            }
+
+            if (response.status >= 300 && response.status < 400) {
+                console.log('响应跟踪 - 检测到重定向状态码:', response.status);
+            }
+        }
+    }
+
+    /**
+     * 处理响应错误
+     */
+    private async handleResponseError(error: any): Promise<AxiosResponse> {
+        if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+            throw new Error(error.message || 'Request Timeout');
+        }
+
+        const originalRequest = error.config;
+
+        if (
+            error?.response?.status === HTTP_STATUS.UNAUTHORIZED &&
+            !originalRequest?._retry
+        ) {
+            if (!this.oauth2Token) {
+                throw new Error('No OAuth2 token available');
+            }
+
+            originalRequest._retry = true;
+
+            try {
+                if (!tokenRefreshPromise) {
+                    tokenRefreshPromise = this.refreshOauth2Token().finally(
+                        () => {
+                            tokenRefreshPromise = null;
+                        }
+                    );
+                }
+
+                await tokenRefreshPromise;
+
+                originalRequest.headers.Authorization = `Bearer ${this.oauth2Token.access_token}`;
+                return this.client(originalRequest);
+            } catch (err) {
+                console.error('Token refresh failed:', err);
+                throw err;
+            }
+        }
+
+        if (axios.isAxiosError(error) && error.response) {
+            this.handleError(error.response);
+        } else {
+            throw new Error('Network error or unknown error occurred');
+        }
+        throw error;
+    }
+
+    /**
+     * 获取OAuth消费者信息
+     */
+    async fetchOauthConsumer(): Promise<void> {
         const response = await axios.get(OAUTH_CONSUMER_URL);
         this.OAUTH_CONSUMER = {
             key: response.data.consumer_key,
@@ -172,7 +219,10 @@ export class HttpClient {
         };
     }
 
-    async checkTokenVaild() {
+    /**
+     * 检查令牌有效性
+     */
+    async checkTokenVaild(): Promise<void> {
         if (this.oauth2Token) {
             if (this.oauth2Token.expires_at < DateTime.now().toSeconds()) {
                 console.error('Token expired!');
@@ -181,11 +231,17 @@ export class HttpClient {
         }
     }
 
+    /**
+     * GET请求
+     */
     async get<T>(url: string, config?: AxiosRequestConfig<any>): Promise<T> {
         const response = await this.client.get<T>(url, config);
         return response?.data;
     }
 
+    /**
+     * POST请求
+     */
     async post<T>(
         url: string,
         data: any,
@@ -195,6 +251,9 @@ export class HttpClient {
         return response?.data;
     }
 
+    /**
+     * PUT请求
+     */
     async put<T>(
         url: string,
         data: any,
@@ -204,6 +263,9 @@ export class HttpClient {
         return response?.data;
     }
 
+    /**
+     * DELETE请求
+     */
     async delete<T>(url: string, config?: AxiosRequestConfig<any>): Promise<T> {
         const response = await this.client.post<T>(url, null, {
             ...config,
@@ -215,16 +277,25 @@ export class HttpClient {
         return response?.data;
     }
 
+    /**
+     * 设置通用请求头
+     */
     setCommonHeader(headers: RawAxiosRequestHeaders): void {
         _.each(headers, (headerValue, key) => {
             this.client.defaults.headers.common[key] = headerValue;
         });
     }
 
+    /**
+     * 处理错误
+     */
     handleError(response: AxiosResponse): void {
         this.handleHttpError(response);
     }
 
+    /**
+     * 处理HTTP错误
+     */
     handleHttpError(response: AxiosResponse): void {
         const { status, statusText, data } = response;
         const errorMessage = {
@@ -238,88 +309,174 @@ export class HttpClient {
     }
 
     /**
-     * Login to Garmin Connect
-     * @param username
-     * @param password
-     * @returns {Promise<HttpClient>}
+     * 登录到Garmin Connect
+     * @param username 用户名
+     * @param password 密码
+     * @param mfaCallback MFA验证回调函数
+     * @returns Promise<HttpClient>
      */
     async login(
         username: string,
         password: string,
         mfaCallback?: () => Promise<string>
     ): Promise<HttpClient> {
-        await this.fetchOauthConsumer();
-        // Step1-3: Get ticket from page.
-        const ticket = await this.getLoginTicket(
-            username,
-            password,
-            mfaCallback
-        );
-        // Step4: Oauth1
-        const oauth1 = await this.getOauth1Token(ticket);
-        // TODO: Handle MFA
+        try {
+            // 准备登录
+            await this.fetchOauthConsumer();
 
-        // Step 5: Oauth2
-        await this.exchange(oauth1);
-        return this;
+            // 获取登录票据
+            const ticket = await this.getLoginTicket(
+                username,
+                password,
+                mfaCallback
+            );
+
+            // 获取OAuth1令牌
+            const oauth1 = await this.getOauth1Token(ticket);
+
+            // 交换OAuth2令牌
+            await this.exchange(oauth1);
+
+            return this;
+        } catch (error) {
+            console.error('Login failed:', error);
+            throw error;
+        }
     }
 
+    /**
+     * 获取登录票据
+     * @param username 用户名
+     * @param password 密码
+     * @param mfaCallback MFA验证回调函数
+     * @returns 登录票据
+     */
     private async getLoginTicket(
         username: string,
         password: string,
         mfaCallback?: () => Promise<string>
     ): Promise<string> {
-        // Step1: Set cookie
-        const step1Params = {
-            clientId: 'GarminConnect',
-            locale: 'en',
-            service: this.url.GC_MODERN
+        // 准备登录参数
+        const loginParams = this.prepareLoginParams();
+
+        // 步骤1: 设置cookie
+        await this.performLoginStep1(loginParams.step1Params);
+
+        // 步骤2: 获取CSRF令牌
+        const csrfToken = await this.performLoginStep2(loginParams.step2Params);
+
+        // 步骤3: 提交凭据
+        let signinResult = await this.performLoginStep3(
+            username,
+            password,
+            csrfToken,
+            loginParams.step3Params
+        );
+
+        // 检查账户锁定状态
+        this.handleAccountLocked(signinResult);
+
+        // 检查页面标题，判断是否需要MFA
+        const pageTitle = this.handlePageTitle(signinResult);
+
+        // 如果需要MFA，执行MFA验证
+        if (this.isMFARequired(pageTitle)) {
+            // console.log('🚀 - getLoginTicket - MFA required:', pageTitle);
+            signinResult = await this.handleMFA(
+                signinResult,
+                loginParams.step3Params,
+                mfaCallback
+            );
+        }
+
+        // 提取票据
+        const ticket = this.extractTicket(signinResult);
+        if (!ticket) {
+            throw new Error(
+                '登录失败（未找到票据或MFA验证失败），请检查用户名和密码'
+            );
+        }
+
+        return ticket;
+    }
+
+    /**
+     * 准备登录参数
+     */
+    private prepareLoginParams(): LoginStepParams {
+        return {
+            step1Params: {
+                clientId: 'GarminConnect',
+                locale: 'en',
+                service: this.url.GC_MODERN
+            },
+            step2Params: {
+                id: 'gauth-widget',
+                embedWidget: true,
+                locale: 'en',
+                gauthHost: this.url.GARMIN_SSO_EMBED
+            },
+            step3Params: {
+                id: 'gauth-widget',
+                embedWidget: true,
+                clientId: 'GarminConnect',
+                locale: 'en',
+                gauthHost: this.url.GARMIN_SSO_EMBED,
+                service: this.url.GARMIN_SSO_EMBED,
+                source: this.url.GARMIN_SSO_EMBED,
+                redirectAfterAccountLoginUrl: this.url.GARMIN_SSO_EMBED,
+                redirectAfterAccountCreationUrl: this.url.GARMIN_SSO_EMBED
+            }
         };
+    }
+
+    /**
+     * 执行登录步骤1：设置cookie
+     */
+    private async performLoginStep1(
+        step1Params: Record<string, string>
+    ): Promise<void> {
         const step1Url = `${this.url.GARMIN_SSO_EMBED}?${qs.stringify(
             step1Params
         )}`;
-        // console.log('login - step1Url:', step1Url);
         await this.client.get(step1Url);
+    }
 
-        // Step2 Get _csrf
-        const step2Params = {
-            id: 'gauth-widget',
-            embedWidget: true,
-            locale: 'en',
-            gauthHost: this.url.GARMIN_SSO_EMBED
-        };
+    /**
+     * 执行登录步骤2：获取CSRF令牌
+     */
+    private async performLoginStep2(
+        step2Params: Record<string, string>
+    ): Promise<string> {
         const step2Url = `${this.url.SIGNIN_URL}?${qs.stringify(step2Params)}`;
-        // console.log('login - step2Url:', step2Url);
         const step2Result = await this.get<string>(step2Url);
-        // console.log('login - step2Result:', step2Result)
-        const csrfRegResult = CSRF_RE.exec(step2Result);
-        if (!csrfRegResult) {
-            throw new Error('login - csrf not found');
-        }
-        const csrf_token = csrfRegResult[1];
-        console.log('🚀 - getLoginTicket - csrf:', csrf_token);
 
-        // Step3 Get ticket
-        const signinParams = {
-            id: 'gauth-widget',
-            embedWidget: true,
-            clientId: 'GarminConnect',
-            locale: 'en',
-            gauthHost: this.url.GARMIN_SSO_EMBED,
-            service: this.url.GARMIN_SSO_EMBED,
-            source: this.url.GARMIN_SSO_EMBED,
-            redirectAfterAccountLoginUrl: this.url.GARMIN_SSO_EMBED,
-            redirectAfterAccountCreationUrl: this.url.GARMIN_SSO_EMBED
-        };
-        const step3Url = `${this.url.SIGNIN_URL}?${qs.stringify(signinParams)}`;
-        console.log('🚀 - getLoginTicket - step3Url:', step3Url);
+        const csrfToken = this.extractCsrfToken(step2Result);
+        if (!csrfToken) {
+            throw new Error('登录 - 未找到CSRF令牌');
+        }
+        return csrfToken;
+    }
+
+    /**
+     * 执行登录步骤3：提交凭据
+     */
+    private async performLoginStep3(
+        username: string,
+        password: string,
+        csrfToken: string,
+        step3Params: Record<string, string>
+    ): Promise<string> {
+        const step3Url = `${this.url.SIGNIN_URL}?${qs.stringify(step3Params)}`;
+        // console.log('🚀 - getLoginTicket - step3Url:', step3Url);
+
         const step3Form = new FormData();
         step3Form.append('username', username);
         step3Form.append('password', password);
         step3Form.append('embed', 'true');
-        step3Form.append('_csrf', csrf_token);
-        let signinResult = '';
-        signinResult = await this.post<string>(step3Url, step3Form, {
+        step3Form.append('_csrf', csrfToken);
+
+        return this.post<string>(step3Url, step3Form, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 Dnt: 1,
@@ -328,70 +485,91 @@ export class HttpClient {
                 'User-Agent': USER_AGENT_CONNECTMOBILE
             }
         });
-        this.handleAccountLocked(signinResult);
-        const title = this.handlePageTitle(signinResult);
-        if (title.toLowerCase().includes('mfa')) {
-            console.log('🚀 - getLoginTicket - MFA required:', title);
-            signinResult = await this.handleMFA(
-                signinResult,
-                signinParams,
-                mfaCallback
-            );
-        }
-
-        const ticketRegResult = TICKET_RE.exec(signinResult);
-        if (!ticketRegResult) {
-            throw new Error(
-                'login failed (Ticket not found or MFA), please check username and password'
-            );
-        }
-        const ticket = ticketRegResult[1];
-        return ticket;
     }
 
+    /**
+     * 判断是否需要MFA验证
+     */
+    private isMFARequired(pageTitle: string): boolean {
+        return pageTitle.toLowerCase().includes('mfa');
+    }
+
+    /**
+     * 从响应中提取票据
+     */
+    private extractTicket(signinResult: string): string | null {
+        const ticketRegResult = TICKET_RE.exec(signinResult);
+        return ticketRegResult ? ticketRegResult[1] : null;
+    }
+
+    /**
+     * 处理MFA验证
+     * @param htmlStr HTML响应字符串
+     * @param signinParams 登录参数
+     * @param mfaCallback MFA验证回调函数
+     * @returns MFA验证后的响应字符串
+     */
     async handleMFA(
         htmlStr: string,
         signinParams: Record<string, any>,
         mfaCallback?: () => Promise<string>
     ): Promise<string> {
+        // 验证MFA回调函数
         if (!mfaCallback) {
-            throw new Error(
-                'login failed (MFA required), please provide MFA callback'
-            );
+            throw new Error('登录失败（需要MFA验证），请提供MFA回调函数');
         }
+
         // 提取CSRF令牌
         const csrfToken = this.extractCsrfToken(htmlStr);
-        console.log('🚀 - handleMFA - csrfToken:', csrfToken);
+        // console.log('🚀 - handleMFA - csrfToken:', csrfToken);
         if (!csrfToken) {
             throw new Error('无法从MFA页面提取CSRF令牌');
         }
+
+        // 获取MFA验证码
         const mfaCode = await mfaCallback();
         console.log('🚀 - handleMFA - mfaCode:', mfaCode);
 
-        // 处理MFA验证 - 使用FormData方式，与旧版本一致
+        // 提交MFA验证
+        const mfaResult = await this.submitMFACode(
+            csrfToken,
+            mfaCode,
+            signinParams
+        );
+
+        // 验证MFA结果
+        return this.validateMFAResult(mfaResult);
+    }
+
+    /**
+     * 提交MFA验证码
+     */
+    private async submitMFACode(
+        csrfToken: string,
+        mfaCode: string,
+        signinParams: Record<string, any>
+    ): Promise<string> {
         const SSO = this.url.GARMIN_SSO;
         const mfaForm = new FormData();
         mfaForm.append('mfa-code', mfaCode);
         mfaForm.append('embed', 'true');
         mfaForm.append('_csrf', csrfToken);
 
-        const mfaResult = await this.post<string>(
+        return this.post<string>(
             `${SSO}/verifyMFA/loginEnterMfaCode`,
             mfaForm,
             {
-                params: signinParams, // 将signinParams作为查询参数
+                params: signinParams,
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     Dnt: 1,
                     Origin: this.url.GARMIN_SSO_ORIGIN,
-                    Referer: `${SSO}/signin`, // 设置正确的Referer
+                    Referer: `${SSO}/signin`,
                     'User-Agent': USER_AGENT_BROWSER
                 },
-                maxRedirects: 10, // 确保跟随重定向
-                // 添加响应拦截器，确保获取重定向后的最终响应
+                maxRedirects: 10,
                 transformResponse: [
                     function (data, headers) {
-                        // 检查是否有重定向
                         if (
                             headers.location &&
                             headers.location.includes('logintoken')
@@ -406,11 +584,15 @@ export class HttpClient {
                 ]
             }
         );
+    }
 
-        console.log('MFA验证完成:', mfaResult);
+    /**
+     * 验证MFA结果
+     */
+    private validateMFAResult(mfaResult: string): string {
+        // console.log('MFA验证完成:', mfaResult);
         const pageTitle = this.handlePageTitle(mfaResult);
         console.log('MFA验证后的页面标题:', pageTitle);
-        // 保存MFA验证响应用于调试
         return mfaResult;
     }
 
@@ -424,45 +606,53 @@ export class HttpClient {
         return match ? match[1] : null;
     }
 
-    // TODO: Handle Phone number
+    /**
+     * 处理页面标题
+     * @param htmlStr HTML字符串
+     * @returns 页面标题
+     */
     handlePageTitle(htmlStr: string): string {
-        const pageTitileRegResult = PAGE_TITLE_RE.exec(htmlStr);
-        if (pageTitileRegResult) {
-            const title = pageTitileRegResult[1];
-            console.log('login page title:', title);
-
+        const pageTitleRegResult = PAGE_TITLE_RE.exec(htmlStr);
+        if (pageTitleRegResult) {
+            const title = pageTitleRegResult[1];
+            console.log('登录页面标题:', title);
             if (_.includes(title, 'Update Phone Number')) {
-                // current I don't know where to update it
-                // See:  https://github.com/matin/garth/issues/19
                 throw new Error(
-                    'login failed (Update Phone number), please update your phone number, See:  https://github.com/matin/garth/issues/19'
+                    '登录失败（需要更新电话号码），请更新您的电话号码，参考: https://github.com/matin/garth/issues/19'
                 );
             }
             return title;
         } else {
-            throw new Error('login failed (Page title not found)');
+            throw new Error('登录失败（未找到页面标题）');
         }
     }
 
+    /**
+     * 处理账户锁定状态
+     * @param htmlStr HTML字符串
+     */
     handleAccountLocked(htmlStr: string): void {
         const accountLockedRegResult = ACCOUNT_LOCKED_RE.exec(htmlStr);
         if (accountLockedRegResult) {
             const msg = accountLockedRegResult[1];
             console.error(msg);
             throw new Error(
-                'login failed (AccountLocked), please open connect web page to unlock your account'
+                '登录失败（账户已锁定），请打开Connect网页解锁您的账户'
             );
         }
     }
 
-    async refreshOauth2Token() {
+    /**
+     * 刷新OAuth2令牌
+     */
+    async refreshOauth2Token(): Promise<void> {
         try {
             if (!this.OAUTH_CONSUMER) {
                 await this.fetchOauthConsumer();
             }
 
             if (!this.oauth2Token || !this.oauth1Token) {
-                throw new Error('Missing required tokens for refresh');
+                throw new Error('缺少刷新令牌所需的必要令牌');
             }
 
             const oauth1 = {
@@ -472,18 +662,24 @@ export class HttpClient {
 
             await this.exchange(oauth1);
             console.log(
-                `「${this.config.username}」in「${this.url.domain}」 OAuth2 token refreshed successfully`
+                `「${this.config.username}」在「${this.url.domain}」的OAuth2令牌刷新成功`
             );
         } catch (error) {
-            console.error('Failed to refresh OAuth2 token:', error);
+            console.error('刷新OAuth2令牌失败:', error);
             throw error;
         }
     }
 
+    /**
+     * 获取OAuth1令牌
+     * @param ticket 登录票据
+     * @returns OAuth1令牌和客户端
+     */
     async getOauth1Token(ticket: string): Promise<IOauth1> {
         if (!this.OAUTH_CONSUMER) {
-            throw new Error('No OAUTH_CONSUMER');
+            throw new Error('未找到OAuth消费者信息');
         }
+
         const params = {
             ticket,
             'login-url': this.url.GARMIN_SSO_EMBED,
@@ -495,12 +691,11 @@ export class HttpClient {
 
         const oauth = this.getOauthClient(this.OAUTH_CONSUMER);
 
-        const step4RequestData = {
+        const requestData = {
             url: url,
             method: 'GET'
         };
-        const headers = oauth.toHeader(oauth.authorize(step4RequestData));
-        // console.log('getOauth1Token - headers:', headers);
+        const headers = oauth.toHeader(oauth.authorize(requestData));
 
         const response = await this.get<string>(url, {
             headers: {
@@ -508,15 +703,19 @@ export class HttpClient {
                 'User-Agent': USER_AGENT_CONNECTMOBILE
             }
         });
-        // console.log('getOauth1Token - response:', response);
+
         const token = qs.parse(response) as unknown as IOauth1Token;
-        // console.log('getOauth1Token - token:', token);
         this.oauth1Token = token;
         return { token, oauth };
     }
 
+    /**
+     * 获取OAuth客户端
+     * @param consumer OAuth消费者信息
+     * @returns OAuth客户端
+     */
     getOauthClient(consumer: IOauth1Consumer): OAuth {
-        const oauth = new OAuth({
+        return new OAuth({
             consumer: consumer,
             signature_method: 'HMAC-SHA1',
             hash_function(base_string: string, key: string) {
@@ -526,15 +725,17 @@ export class HttpClient {
                     .digest('base64');
             }
         });
-        return oauth;
     }
-    //
-    async exchange(oauth1: IOauth1) {
+
+    /**
+     * 交换OAuth2令牌
+     * @param oauth1 OAuth1令牌和客户端
+     */
+    async exchange(oauth1: IOauth1): Promise<void> {
         const token = {
             key: oauth1.token.oauth_token,
             secret: oauth1.token.oauth_token_secret
         };
-        // console.log('exchange - token:', token);
 
         const baseUrl = `${this.url.OAUTH_URL}/exchange/user/2.0`;
         const requestData = {
@@ -543,10 +744,9 @@ export class HttpClient {
             data: null
         };
 
-        const step5AuthData = oauth1.oauth.authorize(requestData, token);
-        // console.log('login - step5AuthData:', step5AuthData);
-        const url = `${baseUrl}?${qs.stringify(step5AuthData)}`;
-        // console.log('exchange - url:', url);
+        const authData = oauth1.oauth.authorize(requestData, token);
+        const url = `${baseUrl}?${qs.stringify(authData)}`;
+
         this.oauth2Token = undefined;
         const response = await this.post<IOauth2Token>(url, null, {
             headers: {
@@ -554,11 +754,15 @@ export class HttpClient {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
-        // console.log('exchange - response:', response);
+
         this.oauth2Token = this.setOauth2TokenExpiresAt(response);
-        // console.log('exchange - oauth2Token:', this.oauth2Token);
     }
 
+    /**
+     * 设置OAuth2令牌过期时间
+     * @param token OAuth2令牌
+     * @returns 设置了过期时间的OAuth2令牌
+     */
     setOauth2TokenExpiresAt(token: IOauth2Token): IOauth2Token {
         const now = DateTime.now();
         const expiresAt = now.plus({ seconds: token.expires_in });
