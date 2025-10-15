@@ -38,16 +38,6 @@ const USER_AGENT_BROWSER_MAC =
 const OAUTH_CONSUMER_URL =
     'https://thegarth.s3.amazonaws.com/oauth_consumer.json';
 
-// 登录步骤常量
-const LOGIN_STEPS = {
-    SET_COOKIE: 1,
-    GET_CSRF: 2,
-    SUBMIT_CREDENTIALS: 3,
-    HANDLE_MFA: 4,
-    GET_OAUTH1: 5,
-    EXCHANGE_TOKEN: 6
-} as const;
-
 // HTTP状态码常量
 const HTTP_STATUS = {
     UNAUTHORIZED: 401
@@ -63,12 +53,6 @@ interface LoginStepParams {
     step1Params: Record<string, any>;
     step2Params: Record<string, any>;
     step3Params: Record<string, any>;
-}
-
-interface MFAResponse {
-    success: boolean;
-    ticket?: string;
-    error?: string;
 }
 
 // 全局变量
@@ -754,7 +738,6 @@ export class HttpClient {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
-
         this.oauth2Token = this.setOauth2TokenExpiresAt(response);
     }
 
