@@ -87,7 +87,7 @@ export class HttpClient {
             })
         );
         this.config = config;
-        const mfaStorageDir = config.mfaStorageDir || './shared-mfa-sessions';
+        const mfaStorageDir = config.mfaStorageDir || '/tmp';
         this.mfaManager = MFAManager.getInstance(mfaStorageDir);
         this.setupInterceptors();
     }
