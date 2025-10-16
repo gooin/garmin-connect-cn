@@ -7,7 +7,7 @@ import path from 'path';
  */
 export class MFAManager {
     private static instance: MFAManager;
-    private readonly storageDir: string;
+    public readonly storageDir: string;
     private readonly DEFAULT_TIMEOUT = 5 * 60 * 1000; // 5分钟
 
     private constructor(storageDir?: string) {
@@ -22,10 +22,10 @@ export class MFAManager {
      */
     public static getInstance(storageDir?: string): MFAManager {
         if (!MFAManager.instance) {
-            console.log('创建MFA管理器实例');
+            console.log('创建MFA管理器实例', storageDir);
             MFAManager.instance = new MFAManager(storageDir);
         }
-        console.log('返回MFA管理器实例');
+        console.log('返回MFA管理器实例', MFAManager.instance.storageDir);
         return MFAManager.instance;
     }
 
