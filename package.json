@@ -41,6 +41,7 @@
         "@types/luxon": "^3.3.2",
         "@types/node": "^18.11.15",
         "@types/qs": "^6.9.7",
+        "@types/redis": "^4.0.11",
         "@types/request-promise": "^4.1.48",
         "pre-commit": "^1.2.2",
         "prettier": "^2.8.1",
@@ -53,15 +54,18 @@
     },
     "runkitExampleFilename": "./examples/example.js",
     "dependencies": {
+        "@upstash/redis": "^1.35.6",
         "app-root-path": "^3.1.0",
         "axios": "^1.5.1",
         "axios-cookiejar-support": "^6.0.4",
         "crypto": "^1.0.1",
         "form-data": "^4.0.0",
+        "ioredis": "^5.8.1",
         "lodash": "^4.17.21",
         "luxon": "^3.4.3",
         "oauth-1.0a": "^2.2.6",
         "qs": "^6.11.2",
+        "redis": "^4.6.10",
         "tough-cookie": "^6.0.0"
     },
     "pre-commit": "pretty"

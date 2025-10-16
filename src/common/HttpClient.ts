@@ -87,8 +87,13 @@ export class HttpClient {
             })
         );
         this.config = config;
-        const mfaStorageDir = config.mfaStorageDir || '/tmp';
-        this.mfaManager = MFAManager.getInstance(mfaStorageDir);
+
+        // 使用新的MFA配置初始化MFAManager
+        const mfaConfig = config.mfa || {
+            type: 'file',
+            dir: config.mfaStorageDir || '/tmp'
+        };
+        this.mfaManager = MFAManager.getInstance(mfaConfig);
         this.setupInterceptors();
     }
 
@@ -374,9 +379,7 @@ export class HttpClient {
             // 如果提供了sessionId，则使用分步登录模式
             if (sessionId) {
                 // 等待外部提供验证码
-                const mfaCode = await MFAManager.getInstance().waitForMFACode(
-                    sessionId
-                );
+                const mfaCode = await this.mfaManager.waitForMFACode(sessionId);
 
                 // 使用获取到的验证码完成MFA验证
                 signinResult = await this.handleMFAWithCode(

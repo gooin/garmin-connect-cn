@@ -17,6 +17,15 @@ export type GCHttpClientConfig = {
     timeout?: number;
     domain?: GarminDomain;
     mfaStorageDir?: string;
+    mfa?: MFAConfig;
+};
+
+export type MFAConfig = {
+    type: 'file' | 'redis';
+    dir?: string; // 用于文件存储
+    redisUrl?: string; // 用于Redis存储
+    redisToken?: string; // 用于Upstash Redis认证
+    redis?: any; // Redis客户端实例
 };
 
 export type EventCallback<T> = (data: T) => void;
