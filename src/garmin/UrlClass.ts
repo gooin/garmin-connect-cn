@@ -126,4 +126,7 @@ export class UrlClass {
     get CONSENT_GRANT() {
         return `${this.GC_API}/gdprconsent-service/consent/grant`;
     }
+    get ACCOUNT_DEVICE_SYNC() {
+        return `${this.GC_API}/userpreference-service/account.deviceSync`;
+    }
 }

@@ -51,7 +51,7 @@ export default class GarminConnect {
     config: GCConfig;
     private _userHash: GCUserHash | undefined;
     private listeners: Listeners;
-    private url: UrlClass;
+    url: UrlClass;
 
     // private oauth1: OAuth;
     constructor(config: GCConfig, domain: GarminDomain = 'garmin.com') {
@@ -649,17 +649,72 @@ export default class GarminConnect {
         }
     }
 
-    async consenGrant(): Promise<void> {
+    async consentGrant(): Promise<void> {
         try {
-            const result = await this.client.post<void>(
-                `${this.url.CONSENT_GRANT}`,
-                {
-                    consentTypeId: 'DI_CONNECT_UPLOAD',
-                    consentLocale: 'en-US',
-                    consentVersion: '59'
-                }
+            // 为每个请求添加单独的错误处理，确保即使有请求失败，其他请求也能继续执行
+            const results = await Promise.all([
+                this.client
+                    .post<void>(`${this.url.CONSENT_GRANT}`, {
+                        consentTypeId: 'DI_CONNECT_UPLOAD',
+                        consentLocale: 'en-US',
+                        consentVersion: '59'
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            'DI_CONNECT_UPLOAD 请求失败:',
+                            error.message
+                        );
+                        return null;
+                    }),
+                this.client
+                    .post<void>(`${this.url.CONSENT_GRANT}`, {
+                        consentTypeId: 'DI_CONNECT_CONNECT-PRIVACY',
+                        consentLocale: 'zh-CN',
+                        consentVersion: '18'
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            'DI_CONNECT_CONNECT-PRIVACY 请求失败:',
+                            error.message
+                        );
+                        return null;
+                    }),
+                this.client
+                    .post<void>(`${this.url.CONSENT_GRANT}`, {
+                        consentTypeId: 'DI_CONNECT_GOLF-PRIVACY',
+                        consentLocale: 'zh-CN',
+                        consentVersion: '16'
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            'DI_CONNECT_GOLF-PRIVACY 请求失败:',
+                            error.message
+                        );
+                        return null;
+                    }),
+                this.client
+                    .put<void>(`${this.url.ACCOUNT_DEVICE_SYNC}`, {
+                        key: 'account.deviceSync',
+                        value: true
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            'ACCOUNT_DEVICE_SYNC 请求失败:',
+                            error.message
+                        );
+                        return null;
+                    })
+            ]);
+
+            console.log('consentGrant 请求结果:', results);
+
+            // 检查有多少请求成功
+            const successfulRequests = results.filter(
+                (result) => result !== null
+            ).length;
+            console.log(
+                `consentGrant: ${successfulRequests}/${results.length} 个请求成功`
             );
-            return result;
         } catch (error: any) {
             throw new Error(`Error in consenGrant: ${error.message}`);
         }
