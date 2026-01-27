@@ -40,7 +40,14 @@ import {
     IActivity
 } from './types/activity';
 import { ICourse, ICourseDetail, ICoursesForUser } from './types/course';
-import { SleepData } from './types/sleep';
+import { SleepData, SleepDailySummary } from './types/sleep';
+import { HRVData } from './types/hrv';
+import {
+    LatestTrainingStatusResponse,
+    TrainingLoadBalanceResponse,
+    WeeklyTrainingStatusResponse
+} from './types/training-status';
+import { PersonalInfoResponse } from './types/personal-info';
 import Running from './workouts/Running';
 
 export interface Session {}
@@ -433,6 +440,125 @@ export default class GarminConnect {
             };
         } catch (error: any) {
             throw new Error(`Error in getSleepDuration: ${error.message}`);
+        }
+    }
+
+    async getSleepDailySummary(
+        startDate: Date,
+        endDate: Date
+    ): Promise<SleepDailySummary> {
+        try {
+            const startStr = toDateString(startDate);
+            const endStr = toDateString(endDate);
+            // URL pattern: /sleep-service/stats/sleep/daily/2026-01-21/2026-01-27
+            const summary = await this.client.get<SleepDailySummary>(
+                `${this.url.SLEEP_DAILY_SUMMARY}/${startStr}/${endStr}`
+            );
+            return summary;
+        } catch (error: any) {
+            throw new Error(`Error in getSleepDailySummary: ${error.message}`);
+        }
+    }
+
+    async getHRVData(date = new Date()): Promise<HRVData> {
+        try {
+            const dateStr = toDateString(date);
+            // URL pattern: /hrv-service/hrv/2026-01-27
+            const hrvData = await this.client.get<HRVData>(
+                `${this.url.HRV}/${dateStr}`
+            );
+            return hrvData;
+        } catch (error: any) {
+            throw new Error(`Error in getHRVData: ${error.message}`);
+        }
+    }
+
+    async getTrainingStatus(
+        date = new Date()
+    ): Promise<LatestTrainingStatusResponse> {
+        try {
+            const dateStr = toDateString(date);
+            // URL pattern: /metrics-service/metrics/trainingstatus/daily/2026-01-27
+            // This returns the *latest* status for that day (or generally latest if date is today)
+            const response =
+                await this.client.get<LatestTrainingStatusResponse>(
+                    `${this.url.TRAINING_STATUS_DAILY}/${dateStr}`
+                );
+            return response;
+        } catch (error: any) {
+            throw new Error(`Error in getTrainingStatus: ${error.message}`);
+        }
+    }
+
+    async getTrainingLoadBalance(
+        date = new Date()
+    ): Promise<TrainingLoadBalanceResponse> {
+        try {
+            const dateStr = toDateString(date);
+            // URL pattern: /metrics-service/metrics/trainingloadbalance/latest/2026-01-27
+            const response = await this.client.get<TrainingLoadBalanceResponse>(
+                `${this.url.TRAINING_LOAD_BALANCE}/${dateStr}`
+            );
+            return response;
+        } catch (error: any) {
+            throw new Error(
+                `Error in getTrainingLoadBalance: ${error.message}`
+            );
+        }
+    }
+
+    async getWeeklyTrainingStatus(
+        startDate: Date,
+        endDate: Date
+    ): Promise<WeeklyTrainingStatusResponse> {
+        try {
+            const profile = await this.getUserProfile();
+            const displayName = profile.displayName;
+            if (!displayName) {
+                throw new Error(
+                    'Could not retrieve display name for weekly training status.'
+                );
+            }
+
+            const fromDateStr = toDateString(startDate);
+            const toDateStr = toDateString(endDate);
+
+            // URL pattern: /metrics-service/metrics/trainingstatus/weekly/{displayName}
+            const response =
+                await this.client.get<WeeklyTrainingStatusResponse>(
+                    `${this.url.TRAINING_STATUS_WEEKLY}/${displayName}`,
+                    {
+                        params: {
+                            fromCalendarDate: fromDateStr,
+                            toCalendarDate: toDateStr
+                        }
+                    }
+                );
+            return response;
+        } catch (error: any) {
+            throw new Error(
+                `Error in getWeeklyTrainingStatus: ${error.message}`
+            );
+        }
+    }
+
+    async getPersonalInfo(): Promise<PersonalInfoResponse> {
+        try {
+            const profile = await this.getUserProfile();
+            const displayName = profile.displayName;
+            if (!displayName) {
+                throw new Error(
+                    'Could not retrieve display name for personal info.'
+                );
+            }
+
+            // URL pattern: /userprofile-service/userprofile/personal-information/{displayName}
+            const response = await this.client.get<PersonalInfoResponse>(
+                `${this.url.PERSONAL_INFO}/${displayName}`
+            );
+            return response;
+        } catch (error: any) {
+            throw new Error(`Error in getPersonalInfo: ${error.message}`);
         }
     }
 

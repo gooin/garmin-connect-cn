@@ -71,6 +71,27 @@ export class UrlClass {
     get DAILY_SLEEP() {
         return `${this.GC_API}/sleep-service/sleep/dailySleepData`;
     }
+    get SLEEP_DAILY_SUMMARY() {
+        return `${this.GC_API}/sleep-service/stats/sleep/daily`;
+    }
+    get HRV() {
+        return `${this.GC_API}/hrv-service/hrv`;
+    }
+    get HRV_DAILY_SUMMARY() {
+        return `${this.GC_API}/hrv-service/hrv/daily`;
+    }
+    get TRAINING_STATUS_DAILY() {
+        return `${this.GC_API}/metrics-service/metrics/trainingstatus/daily`;
+    }
+    get TRAINING_STATUS_WEEKLY() {
+        return `${this.GC_API}/metrics-service/metrics/trainingstatus/weekly`;
+    }
+    get TRAINING_LOAD_BALANCE() {
+        return `${this.GC_API}/metrics-service/metrics/trainingloadbalance/latest`;
+    }
+    get PERSONAL_INFO() {
+        return `${this.GC_API}/userprofile-service/userprofile/personal-information`;
+    }
     get DAILY_WEIGHT() {
         return `${this.GC_API}/weight-service/weight/dayview`;
     }

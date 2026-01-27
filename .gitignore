@@ -27,3 +27,5 @@ garmin.config.json
 # tests
 test
 .vscode
+.agent
+APIs

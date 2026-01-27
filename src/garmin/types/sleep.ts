@@ -124,3 +124,53 @@ export interface SleepData {
     bodyBatteryChange: number;
     restingHeartRate: number;
 }
+
+export interface SleepOverallStats {
+    averageSpO2: number | null;
+    meanAvgHeartRate: number | null;
+    averageLocalSleepStartTime: number;
+    averageRespiration: number;
+    averageBodyBatteryChange: number;
+    averageSkinTempF: number | null;
+    averageSleepScore: number;
+    averageLocalSleepEndTime: number;
+    averageSkinTempC: number | null;
+    averageSleepSeconds: number;
+    averageSleepNeed: number;
+    averageRestingHeartRate: number;
+}
+
+export interface SleepDailyValues {
+    remTime: number;
+    restingHeartRate: number;
+    totalSleepTimeInSeconds: number;
+    respiration: number;
+    localSleepEndTimeInMillis: number;
+    deepTime: number;
+    awakeTime: number;
+    sleepScoreQuality: string; // e.g., "GOOD", "EXCELLENT"
+    spO2: number | null;
+    localSleepStartTimeInMillis: number;
+    sleepNeed: number;
+    bodyBatteryChange: number;
+    gmtSleepStartTimeInMillis: number;
+    gmtSleepEndTimeInMillis: number;
+    hrvStatus: string; // e.g., "BALANCED", "UNBALANCED"
+    skinTempF: number | null;
+    sleepScore: number;
+    skinTempC: number | null;
+    lightTime: number;
+    avgOvernightHrv: number | null;
+    avgHeartRate: number | null;
+    hrv7dAverage: number | null;
+}
+
+export interface SleepDailyStat {
+    calendarDate: string;
+    values: SleepDailyValues;
+}
+
+export interface SleepDailySummary {
+    overallStats: SleepOverallStats;
+    individualStats: SleepDailyStat[];
+}
