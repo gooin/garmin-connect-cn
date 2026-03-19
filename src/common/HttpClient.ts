@@ -4,7 +4,6 @@ import axios, {
     AxiosResponse,
     RawAxiosRequestHeaders
 } from 'axios';
-import FormData from 'form-data';
 import _ from 'lodash';
 import { DateTime } from 'luxon';
 import OAuth from 'oauth-1.0a';
@@ -473,7 +472,7 @@ export class HttpClient {
         const step3Url = `${this.url.SIGNIN_URL}?${qs.stringify(step3Params)}`;
         // console.log('🚀 - getLoginTicket - step3Url:', step3Url);
 
-        const step3Form = new FormData();
+        const step3Form = new URLSearchParams();
         step3Form.append('username', username);
         step3Form.append('password', password);
         step3Form.append('embed', 'true');
@@ -587,7 +586,7 @@ export class HttpClient {
         signinParams: Record<string, any>
     ): Promise<string> {
         const SSO = this.url.GARMIN_SSO;
-        const mfaForm = new FormData();
+        const mfaForm = new URLSearchParams();
         mfaForm.append('mfa-code', mfaCode);
         mfaForm.append('embed', 'true');
         mfaForm.append('_csrf', csrfToken);
