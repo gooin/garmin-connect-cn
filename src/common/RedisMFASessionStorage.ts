@@ -1,5 +1,7 @@
 import { MFASessionStorage } from './MFASessionStorage';
 
+declare var require: any;
+
 /**
  * Redis实现的MFA会话存储
  */
@@ -14,7 +16,15 @@ export class RedisMFASessionStorage implements MFASessionStorage {
         } else if (redisUrl && redisToken) {
             // 使用Upstash Redis
             try {
-                const { Redis } = require('@upstash/redis');
+                // 尝试静态导入（对于打包环境如Cloudflare Worker）
+                let RedisModule: any;
+                if (typeof require !== 'undefined') {
+                    RedisModule = require('@upstash/redis');
+                } else {
+                    // @ts-ignore
+                    RedisModule = (globalThis as any).UpstashRedis;
+                }
+                const { Redis } = RedisModule;
                 this.redis = new Redis({
                     url: redisUrl,
                     token: redisToken
@@ -81,13 +91,15 @@ export class RedisMFASessionStorage implements MFASessionStorage {
         console.log(`MFA验证会话已创建: ${sessionId}`);
 
         // 轮询检查验证码是否已提交
+        // 使用递归异步等待而不是setInterval，适配Cloudflare Worker环境
+        // Worker环境不支持定时器，但可以使用async/await + setTimeout
         return new Promise<string>((resolve, reject) => {
             const startTime = Date.now();
-            const checkInterval = setInterval(async () => {
+
+            const check = async () => {
                 try {
                     // 检查是否超时
                     if (Date.now() - startTime > timeout) {
-                        clearInterval(checkInterval);
                         await this.cleanupRequest(sessionId);
                         reject(new Error('MFA验证超时，请重新登录'));
                         return;
@@ -96,7 +108,7 @@ export class RedisMFASessionStorage implements MFASessionStorage {
                     // 检查会话状态
                     const data = await this.redis.get(sessionKey);
                     if (!data) {
-                        clearInterval(checkInterval);
+                        await this.cleanupRequest(sessionId);
                         reject(new Error('MFA验证会话已过期'));
                         return;
                     }
@@ -108,21 +120,33 @@ export class RedisMFASessionStorage implements MFASessionStorage {
 
                     // 如果状态已更新为resolved，则返回验证码
                     if (session.status === 'resolved' && session.code) {
-                        clearInterval(checkInterval);
                         await this.cleanupRequest(sessionId);
+                        console.log(
+                            '🚀 RedisMFASessionStorage 收到验证码:',
+                            session.code
+                        );
                         resolve(session.code);
                         return;
                     }
 
                     // 如果状态已更新为rejected，则抛出错误
                     if (session.status === 'rejected' && session.error) {
-                        clearInterval(checkInterval);
                         await this.cleanupRequest(sessionId);
                         reject(new Error(session.error));
                         return;
                     }
+
+                    // 继续等待1秒后再次检查
+                    if (typeof setTimeout === 'function') {
+                        setTimeout(check, 1000);
+                    } else {
+                        // 在不支持setTimeout的环境中，直接返回等待
+                        // 这种情况应该不会发生，因为Worker环境其实支持setTimeout
+                        reject(
+                            new Error('环境不支持定时器，无法等待MFA验证码')
+                        );
+                    }
                 } catch (error) {
-                    clearInterval(checkInterval);
                     await this.cleanupRequest(sessionId);
                     reject(
                         error instanceof Error
@@ -130,7 +154,10 @@ export class RedisMFASessionStorage implements MFASessionStorage {
                             : new Error(String(error))
                     );
                 }
-            }, 1000); // 每秒检查一次
+            };
+
+            // 开始第一次检查
+            check();
         });
     }
 

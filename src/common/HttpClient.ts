@@ -378,7 +378,15 @@ export class HttpClient {
             // 如果提供了sessionId，则使用分步登录模式
             if (sessionId) {
                 // 等待外部提供验证码
+                console.log(
+                    '🚀 - getLoginTicket - 等待验证码 sessionId:',
+                    sessionId
+                );
                 const mfaCode = await this.mfaManager.waitForMFACode(sessionId);
+                console.log(
+                    '🚀 - getLoginTicket - 收到验证码 mfaCode:',
+                    mfaCode
+                );
 
                 // 使用获取到的验证码完成MFA验证
                 signinResult = await this.handleMFAWithCode(
@@ -491,9 +499,15 @@ export class HttpClient {
 
     /**
      * 判断是否需要MFA验证
+     * 如果页面标题不包含"sign"且不包含"ticket"，说明还在验证阶段，可能需要MFA
      */
     private isMFARequired(pageTitle: string): boolean {
-        return pageTitle.toLowerCase().includes('mfa');
+        const lowerTitle = pageTitle.toLowerCase();
+        return (
+            lowerTitle.includes('mfa') ||
+            (lowerTitle.includes('authentication') &&
+                !lowerTitle.includes('sign'))
+        );
     }
 
     /**
