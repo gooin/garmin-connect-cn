@@ -1,14 +1,6 @@
 import { toDateString } from '../../common/DateUtils';
+import { HeartRate } from '../../types/heartrate';
 import { ModuleConstructor } from '../types';
-
-export interface HeartRate {
-    userProfilePK: number;
-    calendarDate: string;
-    maxHeartRate: number;
-    minHeartRate: number;
-    restingHeartRate: number;
-    lastSevenDaysAvgRestingHeartRate: number;
-}
 
 export function applyHeartRateModule(Base: ModuleConstructor) {
     return class HeartRateModule extends Base {

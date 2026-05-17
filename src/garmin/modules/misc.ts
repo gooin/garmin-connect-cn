@@ -1,13 +1,6 @@
 import { ICalendar } from '../types';
+import { GolfSummary, GolfScorecard } from '../types/golf';
 import { ModuleConstructor } from './types';
-
-export interface GolfSummary {
-    scorecardSummaries: unknown[];
-}
-
-export interface GolfScorecard {
-    id: number;
-}
 
 export function applyMiscModule(Base: ModuleConstructor) {
     return class MiscModule extends Base {

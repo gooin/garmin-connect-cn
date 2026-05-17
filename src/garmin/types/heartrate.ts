@@ -1,14 +1,14 @@
-interface HeartRateValueDescriptor {
+export interface HeartRateValueDescriptor {
     key: string;
     index: number;
 }
 
-interface HeartRateEntry {
+export interface HeartRateEntry {
     timestamp: number;
     heartrate: number;
 }
 
-interface HeartRate {
+export interface HeartRate {
     userProfilePK: number;
     calendarDate: string;
     startTimestampGMT: string;

@@ -3,17 +3,8 @@ import {
     convertMLToOunces,
     convertOuncesToML
 } from '../../common/HydrationUtils';
+import { HydrationData, WaterIntake } from '../../types/hydration';
 import { ModuleConstructor } from '../types';
-
-export interface HydrationData {
-    valueInML: number;
-}
-
-export interface WaterIntake {
-    userId: number;
-    calendarDate: string;
-    valueInML: number;
-}
 
 export function applyHydrationModule(Base: ModuleConstructor) {
     return class HydrationModule extends Base {

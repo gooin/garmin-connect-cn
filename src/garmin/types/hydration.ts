@@ -1,4 +1,4 @@
-interface HydrationData {
+export interface HydrationData {
     userId: number;
     calendarDate: string;
     lastEntryTimestampLocal: string;
@@ -12,14 +12,14 @@ interface HydrationData {
     hydrationAutoGoalEnabled: boolean;
 }
 
-interface HydrationContainer {
+export interface HydrationContainer {
     name: string | null;
     volume: number;
     unit: string;
 }
 
 // hydration/log
-interface WaterIntake {
+export interface WaterIntake {
     userId: number;
     calendarDate: string;
     valueInML: number;

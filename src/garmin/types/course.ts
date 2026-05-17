@@ -7,7 +7,7 @@ export interface ICourse {
     displayName: string;
     userGroupId: any;
     geoRoutePk: any;
-    activityType: ActivityType;
+    activityType: CourseActivityType;
     courseName: string;
     courseDescription: any;
     createdDate: number;
@@ -35,14 +35,14 @@ export interface ICourse {
     createdDateFormatted: string;
     updatedDateFormatted: string;
     public: boolean;
-    activityTypeId: ActivityTypeId;
+    activityTypeId: CourseActivityType;
     applicationName?: string;
     companyName?: string;
     companyWebsite?: string;
     imageURL?: string;
 }
 
-export interface ActivityType {
+export interface CourseActivityType {
     typeId: number;
     typeKey: string;
     parentTypeId: number;
@@ -54,15 +54,6 @@ export interface ActivityType {
 export interface PrivacyRule {
     typeId: number;
     typeKey: string;
-}
-
-export interface ActivityTypeId {
-    typeId: number;
-    typeKey: string;
-    parentTypeId: number;
-    isHidden: boolean;
-    restricted: boolean;
-    trimmable: boolean;
 }
 
 export interface ICourseDetail {

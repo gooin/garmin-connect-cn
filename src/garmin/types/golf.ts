@@ -1,6 +1,5 @@
 // summary
-
-interface ScorecardSummary {
+export interface ScorecardSummary {
     id: number;
     customerId: string;
     playerProfileId: number;
@@ -17,7 +16,7 @@ interface ScorecardSummary {
     roundType: string;
 }
 
-interface GolfSummary {
+export interface GolfSummary {
     pageNumber: number;
     rowsPerPage: number;
     totalRows: number;
@@ -25,8 +24,7 @@ interface GolfSummary {
 }
 
 // detail
-
-interface Hole {
+export interface Hole {
     number: number;
     strokes: number;
     penalties: number;
@@ -37,7 +35,7 @@ interface Hole {
     pinPositionLon: number;
 }
 
-interface GolfScorecard {
+export interface GolfScorecard {
     id: number;
     customerId: string;
     playerProfileId: number;

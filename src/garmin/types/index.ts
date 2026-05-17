@@ -7,9 +7,17 @@ export type GarminDomain = 'garmin.com' | 'garmin.cn';
 export * from './activity';
 export * from './activity-stats';
 export * from './body-battery';
+export * from './course';
 export * from './cycling';
 export * from './device';
+export * from './golf';
+export * from './heartrate';
+export * from './hrv';
+export * from './hydration';
+export * from './personal-info';
 export * from './race-prediction';
+export * from './sleep';
+export * from './training-status';
 export * from './weight';
 
 export type GCConfig = GCCredentials & GCHttpClientConfig;

@@ -29,10 +29,6 @@ import { applyDeviceModule } from './modules/device';
 import { applyWorkoutModule } from './modules/workout';
 import { applyCourseModule } from './modules/course';
 import { applyMiscModule } from './modules/misc';
-// 重新导出类型（解决 TS4023 错误）
-export type { GolfSummary, GolfScorecard } from './modules/misc';
-export type { HydrationData, WaterIntake } from './modules/wellness/hydration';
-export type { HeartRate } from './modules/wellness/heart-rate';
 
 export interface Session {}
 
