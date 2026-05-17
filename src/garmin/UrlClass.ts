@@ -89,6 +89,15 @@ export class UrlClass {
     get TRAINING_LOAD_BALANCE() {
         return `${this.GC_API}/metrics-service/metrics/trainingloadbalance/latest`;
     }
+    RACE_PREDICTIONS_MONTHLY(displayName: string) {
+        return `${this.GC_API}/metrics-service/metrics/racepredictions/monthly/${displayName}`;
+    }
+    BIOMETRIC_STAT_RANGE(stat: string, startDate: string, endDate: string) {
+        return `${this.GC_API}/biometric-service/stats/${stat}/range/${startDate}/${endDate}`;
+    }
+    get LATEST_LACTATE_THRESHOLD() {
+        return `${this.GC_API}/biometric-service/biometric/latestLactateThreshold`;
+    }
     get PERSONAL_INFO() {
         return `${this.GC_API}/userprofile-service/userprofile/personal-information`;
     }
