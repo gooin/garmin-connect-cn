@@ -5,6 +5,13 @@ export function toDateString(date: Date) {
     return dateString;
 }
 
+export const toGarminDateString = (date: Date | string): string => {
+    if (date instanceof Date) {
+        return toDateString(date);
+    }
+    return date;
+};
+
 export function calculateTimeDifference(
     sleepStartTimestampGMT: number,
     sleepEndTimestampGMT: number
