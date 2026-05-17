@@ -187,4 +187,16 @@ export class UrlClass {
     get BODY_BATTERY_DAILY() {
         return `${this.GC_API}/usersummary-service/stats/bodybattery/daily`;
     }
+    LATEST_POWER_TO_WEIGHT(date: string) {
+        return `${this.GC_API}/biometric-service/biometric/powerToWeight/latest/${date}`;
+    }
+    get CYCLING_ABILITY() {
+        return `${this.GC_API}/metrics-service/metrics/cycling-ability/latest`;
+    }
+    get POWER_CURVE() {
+        return `${this.GC_API}/fitnessstats-service/powerCurve`;
+    }
+    MAX_MET_LATEST(date: string) {
+        return `${this.GC_API}/metrics-service/metrics/maxmet/latest/${date}`;
+    }
 }

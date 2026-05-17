@@ -47,6 +47,12 @@ import {
 import { ICourse, ICourseDetail, ICoursesForUser } from './types/course';
 import { SleepData, SleepDailySummary } from './types/sleep';
 import { BodyBatteryDailyEntry } from './types/body-battery';
+import {
+    CyclingAbility,
+    MaxMetResponse,
+    PowerCurveResponse,
+    PowerToWeightEntry
+} from './types/cycling';
 import { HRVData } from './types/hrv';
 import {
     LatestTrainingStatusResponse,
@@ -636,6 +642,105 @@ export default class GarminConnect {
             return response;
         } catch (error: any) {
             throw new Error(`Error in getBodyBattery: ${error.message}`);
+        }
+    }
+
+    async getLatestPowerToWeight(
+        date: Date | string = new Date()
+    ): Promise<PowerToWeightEntry[]> {
+        try {
+            const dateStr = toGarminDateString(date);
+            // URL pattern: /biometric-service/biometric/powerToWeight/latest/2026-05-17
+            const response = await this.client.get<PowerToWeightEntry[]>(
+                this.url.LATEST_POWER_TO_WEIGHT(dateStr)
+            );
+            return response;
+        } catch (error: any) {
+            throw new Error(
+                `Error in getLatestPowerToWeight: ${error.message}`
+            );
+        }
+    }
+
+    async getPowerToWeightRange(
+        startDate: Date | string,
+        endDate: Date | string,
+        aggregation: 'weekly' | 'monthly' = 'weekly',
+        sport: 'cycling' | 'running' = 'cycling'
+    ): Promise<BiometricStatRangeEntry[]> {
+        try {
+            return this.client.get<BiometricStatRangeEntry[]>(
+                this.url.BIOMETRIC_STAT_RANGE(
+                    'powerToWeight',
+                    toGarminDateString(startDate),
+                    toGarminDateString(endDate)
+                ),
+                { params: { aggregation, sport } }
+            );
+        } catch (error: any) {
+            throw new Error(`Error in getPowerToWeightRange: ${error.message}`);
+        }
+    }
+
+    async getCyclingAbility(): Promise<CyclingAbility | null> {
+        try {
+            const response = await this.client.get<CyclingAbility>(
+                this.url.CYCLING_ABILITY
+            );
+            if (!response || typeof response !== 'object') {
+                return null;
+            }
+            return response;
+        } catch (error: any) {
+            throw new Error(`Error in getCyclingAbility: ${error.message}`);
+        }
+    }
+
+    async getPowerCurve(
+        sport: 'cycling' | 'running' = 'cycling',
+        startDate?: Date | string,
+        endDate?: Date | string
+    ): Promise<PowerCurveResponse> {
+        try {
+            const params: Record<string, string> = { sport };
+            if (startDate) {
+                params.startDate = toGarminDateString(startDate);
+            }
+            if (endDate) {
+                params.endDate = toGarminDateString(endDate);
+            }
+            const response = await this.client.get<PowerCurveResponse>(
+                this.url.POWER_CURVE,
+                { params }
+            );
+            return response;
+        } catch (error: any) {
+            throw new Error(`Error in getPowerCurve: ${error.message}`);
+        }
+    }
+
+    async getMaxMet(
+        date: Date | string = new Date(),
+        sport?: 'cycling' | 'running'
+    ): Promise<MaxMetResponse | null> {
+        try {
+            const dateStr = toGarminDateString(date);
+            // URL pattern: /metrics-service/metrics/maxmet/latest/2026-05-17?sport=cycling
+            const params: Record<string, string> = {};
+            if (sport) {
+                params.sport = sport;
+            }
+            const response = await this.client.get<MaxMetResponse>(
+                this.url.MAX_MET_LATEST(dateStr),
+                { params }
+            );
+            return response;
+        } catch (error: any) {
+            // 无数据时API返回404
+            if (error.message?.includes('404')) {
+                return null;
+            }
+            throw new Error(`Error in getMaxMet: ${error.message}`);
         }
     }
 
