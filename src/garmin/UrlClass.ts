@@ -184,4 +184,7 @@ export class UrlClass {
     get PRIMARY_TRAINING_DEVICE() {
         return `${this.GC_API}/web-gateway/device-info/primary-training-device`;
     }
+    get BODY_BATTERY_DAILY() {
+        return `${this.GC_API}/usersummary-service/stats/bodybattery/daily`;
+    }
 }

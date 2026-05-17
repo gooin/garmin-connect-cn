@@ -46,6 +46,7 @@ import {
 } from './types/activity-stats';
 import { ICourse, ICourseDetail, ICoursesForUser } from './types/course';
 import { SleepData, SleepDailySummary } from './types/sleep';
+import { BodyBatteryDailyEntry } from './types/body-battery';
 import { HRVData } from './types/hrv';
 import {
     LatestTrainingStatusResponse,
@@ -618,6 +619,23 @@ export default class GarminConnect {
             return summary;
         } catch (error: any) {
             throw new Error(`Error in getSleepDailySummary: ${error.message}`);
+        }
+    }
+
+    async getBodyBattery(
+        startDate: Date | string,
+        endDate: Date | string
+    ): Promise<BodyBatteryDailyEntry[]> {
+        try {
+            const startStr = toGarminDateString(startDate);
+            const endStr = toGarminDateString(endDate);
+            // URL pattern: /usersummary-service/stats/bodybattery/daily/2026-05-11/2026-05-17
+            const response = await this.client.get<BodyBatteryDailyEntry[]>(
+                `${this.url.BODY_BATTERY_DAILY}/${startStr}/${endStr}`
+            );
+            return response;
+        } catch (error: any) {
+            throw new Error(`Error in getBodyBattery: ${error.message}`);
         }
     }
 
