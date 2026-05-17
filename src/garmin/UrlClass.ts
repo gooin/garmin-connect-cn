@@ -136,6 +136,16 @@ export class UrlClass {
         }
         return `${this.GC_API}/course-service/course`;
     }
+    COURSE_FIT(id: GCCourseId, elevation = true) {
+        return `${this.GC_API}/course-service/course/fit/${id}/0?elevation=${elevation}`;
+    }
+    COURSE_GPX(id: GCCourseId) {
+        return `${this.GC_API}/course-service/course/gpx/${id}`;
+    }
+
+    get COURSE_IMPORT() {
+        return `${this.GC_API}/course-service/course/import`;
+    }
 
     get COURSE_FAVORITE() {
         return `${this.GC_API}/course-service/course/favorites`;
