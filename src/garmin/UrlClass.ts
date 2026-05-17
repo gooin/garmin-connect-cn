@@ -160,4 +160,7 @@ export class UrlClass {
     get ACCOUNT_DEVICE_SYNC() {
         return `${this.GC_API}/userpreference-service/account.deviceSync`;
     }
+    get PRIMARY_TRAINING_DEVICE() {
+        return `${this.GC_API}/web-gateway/device-info/primary-training-device`;
+    }
 }

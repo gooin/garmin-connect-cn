@@ -49,6 +49,10 @@ import {
     WeeklyTrainingStatusResponse
 } from './types/training-status';
 import { PersonalInfoResponse } from './types/personal-info';
+import {
+    PrimaryTrainingDeviceResponse,
+    PrimaryWearableDevice
+} from './types/device';
 import Running from './workouts/Running';
 
 export interface Session {}
@@ -702,6 +706,40 @@ export default class GarminConnect {
             return heartRate;
         } catch (error: any) {
             throw new Error(`Error in getHeartRate: ${error.message}`);
+        }
+    }
+
+    async getPrimaryWearableDevice(): Promise<PrimaryWearableDevice | null> {
+        try {
+            const response =
+                await this.client.get<PrimaryTrainingDeviceResponse>(
+                    this.url.PRIMARY_TRAINING_DEVICE
+                );
+            const devices =
+                response.PrimaryTrainingDevices?.deviceWeights ?? [];
+            const primaryWearableDevice = devices.find(
+                (device) => device.primaryWearableDevice
+            );
+
+            if (
+                !primaryWearableDevice?.displayName ||
+                !primaryWearableDevice.deviceId ||
+                !primaryWearableDevice.imageUrl
+            ) {
+                return null;
+            }
+
+            return {
+                primaryWearableDevice:
+                    primaryWearableDevice.primaryWearableDevice === true,
+                displayName: primaryWearableDevice.displayName,
+                deviceId: primaryWearableDevice.deviceId,
+                imageUrl: primaryWearableDevice.imageUrl
+            };
+        } catch (error: any) {
+            throw new Error(
+                `Error in getPrimaryWearableDevice: ${error.message}`
+            );
         }
     }
 
