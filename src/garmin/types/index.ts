@@ -5,6 +5,7 @@ export type GCCourseId = number;
 export type GCBadgeId = number;
 export type GarminDomain = 'garmin.com' | 'garmin.cn';
 export * from './activity';
+export * from './activity-stats';
 export * from './device';
 export * from './weight';
 

@@ -40,6 +40,10 @@ import {
     GCActivityId,
     IActivity
 } from './types/activity';
+import {
+    ActivityStatsEntry,
+    ActivityStatsOptions
+} from './types/activity-stats';
 import { ICourse, ICourseDetail, ICoursesForUser } from './types/course';
 import { SleepData, SleepDailySummary } from './types/sleep';
 import { HRVData } from './types/hrv';
@@ -96,6 +100,44 @@ const buildFitbitWeightCsvRow = (weight: DateWeight): string => {
     ];
     return values.map(escapeCsvValue).join(',');
 };
+
+const DEFAULT_ACTIVITY_STATS_METRICS = [
+    'duration',
+    'distance',
+    'movingDuration',
+    'splitSummaries.noOfSplits.CLIMB_ACTIVE',
+    'splitSummaries.duration.CLIMB_ACTIVE',
+    'splitSummaries.totalAscent.CLIMB_ACTIVE',
+    'splitSummaries.maxElevationGain.CLIMB_ACTIVE',
+    'splitSummaries.numClimbsAttempted.CLIMB_ACTIVE',
+    'splitSummaries.numClimbsCompleted.CLIMB_ACTIVE',
+    'splitSummaries.numClimbSends.CLIMB_ACTIVE',
+    'splitSummaries.numFalls.CLIMB_ACTIVE',
+    'calories',
+    'elevationGain',
+    'elevationLoss',
+    'avgSpeed',
+    'maxSpeed',
+    'avgGradeAdjustedSpeed',
+    'avgHr',
+    'maxHr',
+    'avgRunCadence',
+    'maxRunCadence',
+    'avgBikeCadence',
+    'maxBikeCadence',
+    'avgWheelchairCadence',
+    'maxWheelchairCadence',
+    'avgPower',
+    'maxPower',
+    'avgVerticalOscillation',
+    'avgGroundContactTime',
+    'avgStrideLength',
+    'avgStress',
+    'maxStress',
+    'splitSummaries.duration.CLIMB_REST',
+    'beginPackWeight',
+    'steps'
+];
 
 export default class GarminConnect {
     client: HttpClient;
@@ -232,6 +274,36 @@ export default class GarminConnect {
                 metric: 'duration'
             }
         });
+    }
+
+    async getActivityStats(
+        options: ActivityStatsOptions
+    ): Promise<ActivityStatsEntry[]> {
+        try {
+            const params = new URLSearchParams();
+            params.append('aggregation', 'lifetime');
+            params.append('groupByParentActivityType', 'false');
+            params.append('groupByEventType', 'false');
+            params.append('startDate', toGarminDateString(options.startDate));
+            params.append('endDate', toGarminDateString(options.endDate));
+            if (options.activityType) {
+                params.append('activityType', options.activityType);
+            }
+            for (const metric of options.metrics ??
+                DEFAULT_ACTIVITY_STATS_METRICS) {
+                params.append('metric', metric);
+            }
+            params.append('standardizedUnits', 'false');
+
+            return this.client.get<ActivityStatsEntry[]>(
+                this.url.STAT_ACTIVITIES,
+                {
+                    params
+                }
+            );
+        } catch (error: any) {
+            throw new Error(`Error in getActivityStats: ${error.message}`);
+        }
     }
 
     async downloadWellnessData(date: Date, dir: string) {
