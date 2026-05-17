@@ -6,6 +6,7 @@ export type GCBadgeId = number;
 export type GarminDomain = 'garmin.com' | 'garmin.cn';
 export * from './activity';
 export * from './device';
+export * from './weight';
 
 export type GCConfig = GCCredentials & GCHttpClientConfig;
 

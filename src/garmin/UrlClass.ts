@@ -95,8 +95,20 @@ export class UrlClass {
     get DAILY_WEIGHT() {
         return `${this.GC_API}/weight-service/weight/dayview`;
     }
+    WEIGHT_RANGE(startDate: string, endDate: string) {
+        return `${this.GC_API}/weight-service/weight/range/${startDate}/${endDate}`;
+    }
     get UPDATE_WEIGHT() {
         return `${this.GC_API}/weight-service/user-weight`;
+    }
+    get UPLOAD_FITBIT_CSV() {
+        return `${this.GC_API}/upload-service/upload/fitbit/csv`;
+    }
+    UPLOAD_FEATURE(feature: string) {
+        return `${this.GC_API}/gdprconsent-service/feature/${feature}`;
+    }
+    WELLNESS_UPLOAD_STATUS(owner: number, date: string, uploadUuid: string) {
+        return `${this.GC_API}/wellness-service/wellness/status/${owner}/${date}/${uploadUuid}`;
     }
     get DAILY_HYDRATION() {
         return `${this.GC_API}/usersummary-service/usersummary/hydration/allData`;
