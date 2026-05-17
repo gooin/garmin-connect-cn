@@ -30,7 +30,11 @@ await GCClient.getRacePredictionsMonthly('2025-12-01', '2026-05-31');
         "time5K": 1177,
         "time10K": 2484,
         "timeHalfMarathon": 5463,
-        "timeMarathon": 11853
+        "timeMarathon": 11853,
+        "time5KFormatted": "00:19:37",
+        "time10KFormatted": "00:41:24",
+        "timeHalfMarathonFormatted": "01:31:03",
+        "timeMarathonFormatted": "03:17:33"
     }
 ]
 ```
@@ -38,6 +42,7 @@ await GCClient.getRacePredictionsMonthly('2025-12-01', '2026-05-31');
 字段说明：
 
 -   `time5K`、`time10K`、`timeHalfMarathon`、`timeMarathon` 单位是秒。
+-   `time5KFormatted`、`time10KFormatted`、`timeHalfMarathonFormatted`、`timeMarathonFormatted` 是可直接展示的 `HH:mm:ss`。
 
 ## 跑步乳酸阈值速度
 
@@ -259,42 +264,66 @@ await GCClient.getRunningLactateThreshold('2025-06-02', '2026-05-31');
         "time5K": 1249,
         "time10K": 2632,
         "timeHalfMarathon": 5925,
-        "timeMarathon": 13068
+        "timeMarathon": 13068,
+        "time5KFormatted": "00:20:49",
+        "time10KFormatted": "00:43:52",
+        "timeHalfMarathonFormatted": "01:38:45",
+        "timeMarathonFormatted": "03:37:48"
     },
     {
         "calendarDate": "2026-01-31",
         "time5K": 1176,
         "time10K": 2487,
         "timeHalfMarathon": 5511,
-        "timeMarathon": 12134
+        "timeMarathon": 12134,
+        "time5KFormatted": "00:19:36",
+        "time10KFormatted": "00:41:27",
+        "timeHalfMarathonFormatted": "01:31:51",
+        "timeMarathonFormatted": "03:22:14"
     },
     {
         "calendarDate": "2026-02-28",
         "time5K": 1164,
         "time10K": 2464,
         "timeHalfMarathon": 5441,
-        "timeMarathon": 11834
+        "timeMarathon": 11834,
+        "time5KFormatted": "00:19:24",
+        "time10KFormatted": "00:41:04",
+        "timeHalfMarathonFormatted": "01:30:41",
+        "timeMarathonFormatted": "03:17:14"
     },
     {
         "calendarDate": "2026-03-31",
         "time5K": 1156,
         "time10K": 2435,
         "timeHalfMarathon": 5367,
-        "timeMarathon": 11878
+        "timeMarathon": 11878,
+        "time5KFormatted": "00:19:16",
+        "time10KFormatted": "00:40:35",
+        "timeHalfMarathonFormatted": "01:29:27",
+        "timeMarathonFormatted": "03:17:58"
     },
     {
         "calendarDate": "2026-04-30",
         "time5K": 1170,
         "time10K": 2473,
         "timeHalfMarathon": 5463,
-        "timeMarathon": 11859
+        "timeMarathon": 11859,
+        "time5KFormatted": "00:19:30",
+        "time10KFormatted": "00:41:13",
+        "timeHalfMarathonFormatted": "01:31:03",
+        "timeMarathonFormatted": "03:17:39"
     },
     {
         "calendarDate": "2026-05-17",
         "time5K": 1177,
         "time10K": 2484,
         "timeHalfMarathon": 5463,
-        "timeMarathon": 11853
+        "timeMarathon": 11853,
+        "time5KFormatted": "00:19:37",
+        "time10KFormatted": "00:41:24",
+        "timeHalfMarathonFormatted": "01:31:03",
+        "timeMarathonFormatted": "03:17:33"
     }
 ]
 ```

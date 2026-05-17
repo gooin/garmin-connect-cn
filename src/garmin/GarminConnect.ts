@@ -56,6 +56,7 @@ import {
     BiometricStatRangeEntry,
     LatestLactateThresholdEntry,
     RacePredictionMonthly,
+    RacePredictionMonthlyReadable,
     RunningLactateThreshold,
     RunningLactateThresholdEntry
 } from './types/race-prediction';
@@ -124,6 +125,25 @@ const lactateThresholdSpeedToPace = (speed: number) => {
             .padStart(2, '0')}/km`
     };
 };
+
+const formatSecondsAsTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds]
+        .map((value) => value.toString().padStart(2, '0'))
+        .join(':');
+};
+
+const formatRacePrediction = (
+    prediction: RacePredictionMonthly
+): RacePredictionMonthlyReadable => ({
+    ...prediction,
+    time5KFormatted: formatSecondsAsTime(prediction.time5K),
+    time10KFormatted: formatSecondsAsTime(prediction.time10K),
+    timeHalfMarathonFormatted: formatSecondsAsTime(prediction.timeHalfMarathon),
+    timeMarathonFormatted: formatSecondsAsTime(prediction.timeMarathon)
+});
 
 const DEFAULT_ACTIVITY_STATS_METRICS = [
     'duration',
@@ -686,7 +706,7 @@ export default class GarminConnect {
     async getRacePredictionsMonthly(
         fromCalendarDate: Date | string,
         toCalendarDate: Date | string
-    ): Promise<RacePredictionMonthly[]> {
+    ): Promise<RacePredictionMonthlyReadable[]> {
         try {
             const profile = await this.getUserProfile();
             const displayName = profile.displayName;
@@ -696,7 +716,7 @@ export default class GarminConnect {
                 );
             }
 
-            return this.client.get<RacePredictionMonthly[]>(
+            const response = await this.client.get<RacePredictionMonthly[]>(
                 this.url.RACE_PREDICTIONS_MONTHLY(displayName),
                 {
                     params: {
@@ -705,6 +725,7 @@ export default class GarminConnect {
                     }
                 }
             );
+            return response.map(formatRacePrediction);
         } catch (error: any) {
             throw new Error(
                 `Error in getRacePredictionsMonthly: ${error.message}`

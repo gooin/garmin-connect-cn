@@ -9,6 +9,13 @@ export interface RacePredictionMonthly {
     timeMarathon: number;
 }
 
+export interface RacePredictionMonthlyReadable extends RacePredictionMonthly {
+    time5KFormatted: string;
+    time10KFormatted: string;
+    timeHalfMarathonFormatted: string;
+    timeMarathonFormatted: string;
+}
+
 export interface BiometricStatRangeEntry {
     from: string;
     until: string;
