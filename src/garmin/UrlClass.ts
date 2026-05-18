@@ -41,6 +41,15 @@ export class UrlClass {
     get ACTIVITY() {
         return `${this.GC_API}/activity-service/activity/`;
     }
+    ACTIVITY_LAPS(activityId: number) {
+        return `${this.GC_API}/activity-service/activity/${activityId}/laps`;
+    }
+    ACTIVITY_WEATHER(activityId: number) {
+        return `${this.GC_API}/activity-service/activity/${activityId}/weather`;
+    }
+    ACTIVITY_WORKOUTS(activityId: number) {
+        return `${this.GC_API}/activity-service/activity/${activityId}/workouts`;
+    }
     get STAT_ACTIVITIES() {
         return `${this.GC_API}/fitnessstats-service/activity`;
     }
@@ -198,5 +207,11 @@ export class UrlClass {
     }
     MAX_MET_LATEST(date: string) {
         return `${this.GC_API}/metrics-service/metrics/maxmet/latest/${date}`;
+    }
+    PERSONAL_RECORD_TYPES(displayName: string) {
+        return `${this.GC_API}/personalrecord-service/personalrecordtype/prtypes/${displayName}`;
+    }
+    PERSONAL_RECORDS(displayName: string) {
+        return `${this.GC_API}/personalrecord-service/personalrecord/prs/${displayName}?includeHistory=false`;
     }
 }

@@ -95,6 +95,20 @@ export type CoachApi = {
         sport?: 'cycling' | 'running'
     ) => Promise<MaxMetResponse | null>;
     getPersonalInfo: () => Promise<PersonalInfoResponse>;
+    getPersonalRecordTypes: () => Promise<
+        import('../../types').PersonalRecordType[]
+    >;
+    getPersonalRecords: () => Promise<import('../../types').PersonalRecord[]>;
+    getActivityLaps: (activity: { activityId: number }) => Promise<{
+        activityId: number;
+        lapDTOs: import('../../types').ActivityLap[];
+    }>;
+    getActivityWeather: (activity: {
+        activityId: number;
+    }) => Promise<import('../../types').ActivityWeather>;
+    getActivityWorkouts: (activity: {
+        activityId: number;
+    }) => Promise<import('../../types').ActivityWorkout[]>;
     getRacePredictionsMonthly: (
         fromCalendarDate: Date | string,
         toCalendarDate: Date | string

@@ -6,6 +6,9 @@ import path from 'node:path';
 import { checkIsDirectory, createDirectory, writeToFile } from '../../../utils';
 import { toDateString, toGarminDateString } from '../../common/DateUtils';
 import {
+    ActivityLap,
+    ActivityWeather,
+    ActivityWorkout,
     ExportFileTypeValue,
     ICountActivities,
     IDailyStepsType
@@ -79,6 +82,31 @@ export function applyActivityBaseModule(Base: ModuleConstructor) {
             if (!activity.activityId) throw new Error('Missing activityId');
             return this.client.get<IActivity>(
                 this.url.ACTIVITY + activity.activityId
+            );
+        }
+
+        async getActivityLaps(activity: {
+            activityId: GCActivityId;
+        }): Promise<{ activityId: number; lapDTOs: ActivityLap[] }> {
+            if (!activity.activityId) throw new Error('Missing activityId');
+            return this.client.get(this.url.ACTIVITY_LAPS(activity.activityId));
+        }
+
+        async getActivityWeather(activity: {
+            activityId: GCActivityId;
+        }): Promise<ActivityWeather> {
+            if (!activity.activityId) throw new Error('Missing activityId');
+            return this.client.get(
+                this.url.ACTIVITY_WEATHER(activity.activityId)
+            );
+        }
+
+        async getActivityWorkouts(activity: {
+            activityId: GCActivityId;
+        }): Promise<ActivityWorkout[]> {
+            if (!activity.activityId) throw new Error('Missing activityId');
+            return this.client.get(
+                this.url.ACTIVITY_WORKOUTS(activity.activityId)
             );
         }
 

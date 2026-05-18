@@ -3,8 +3,11 @@ import {
     ActivitiesSummaryOptions,
     ActivityDetailSummary,
     ActivityDetailSummaryOptions,
+    ActivityLap,
     ActivitySubType,
     ActivityType,
+    ActivityWeather,
+    ActivityWorkout,
     CompactActivity,
     CompactTrainingEffect,
     IActivity
@@ -12,7 +15,6 @@ import {
 import {
     CoachApi,
     compactLower,
-    getRange,
     lowerSnake,
     round,
     toMinutes
@@ -251,154 +253,78 @@ const workoutSegments = (source: LooseRecord, detailed: false) =>
             Boolean(segment)
         );
 
-const expandWorkoutSegments = (
-    detail: LooseRecord
-): NonNullable<ActivityDetailSummary['workoutStructure']>['segments'] => {
-    // 按类型分组（保持聚合数据不变）
-    const types = ['warmup', 'active', 'rest', 'cooldown'] as const;
-    const byType = new Map<
-        string,
-        {
-            noOfSplits: number;
-            distanceM: number;
-            durationSec: number;
-            avgHr: number | null;
-            maxHr: number | null;
-            avgCadence: number | null;
-        }
-    >();
-    for (const type of types) {
-        const entries = groupSplits(splitSummaries(detail), type);
-        if (entries.length === 0) continue;
-        const distanceM = entries.reduce(
-            (sum, e) => sum + (numeric(e.distance) ?? 0),
-            0
+/** 华氏度转摄氏度 */
+const fToC = (f: number): number => round(((f - 32) * 5) / 9, 1) ?? f;
+
+/** 将原始 lap 数据压缩为 tuple 数组 */
+const compactLaps = (
+    laps: ActivityLap[]
+): NonNullable<ActivityDetailSummary['laps']> => {
+    const data: NonNullable<ActivityDetailSummary['laps']>['data'] = [];
+    for (const lap of laps) {
+        // 跳过无意义的空 lap
+        if (lap.duration <= 0 && lap.distance <= 0) continue;
+        const distanceKm = round(lap.distance / 1000, 2) ?? 0;
+        const durationMin =
+            round(lap.duration / 60, 1) ??
+            round(lap.movingDuration / 60, 1) ??
+            0;
+        const pace = paceFromDistance(
+            lap.distance,
+            lap.movingDuration || lap.duration
         );
-        const durationSec = entries.reduce(
-            (sum, e) => sum + (numeric(e.duration) ?? 0),
-            0
-        );
-        byType.set(type, {
-            noOfSplits: entries.reduce((sum, e) => sum + splitCount(e), 0),
-            distanceM,
-            durationSec,
-            avgHr: weightedAverage(entries, 'averageHR'),
-            maxHr: round(
-                entries.reduce<number | null>(
-                    (max, e) =>
-                        numeric(e.maxHR) === null
-                            ? max
-                            : max === null
-                            ? numeric(e.maxHR)
-                            : Math.max(max, numeric(e.maxHR)!),
-                    null
-                )
-            ),
-            avgCadence: weightedAverage(entries, 'averageRunCadence')
-        });
+        const avgHr = roundNumber(lap.averageHR);
+        const maxHr = roundNumber(lap.maxHR);
+        const avgCadence = roundNumber(lap.averageRunCadence);
+        const elevGainM = roundNumber(lap.elevationGain);
+        const strideCm = roundNumber(lap.strideLength);
+        const vertOscCm = roundNumber(lap.verticalOscillation, 1);
+        const vertRatio = roundNumber(lap.verticalRatio, 1);
+        const gctMs = roundNumber(lap.groundContactTime);
+        const gctBalanceL = roundNumber(lap.groundContactBalanceLeft, 1);
+        const avgTempC =
+            lap.averageTemperature != null
+                ? roundNumber(lap.averageTemperature)
+                : null;
+        data.push([
+            lap.intensityType?.toLowerCase() ?? '',
+            distanceKm,
+            durationMin,
+            pace ?? '',
+            avgHr,
+            maxHr,
+            avgCadence,
+            elevGainM,
+            strideCm,
+            vertOscCm,
+            vertRatio,
+            gctMs,
+            gctBalanceL,
+            avgTempC
+        ]);
     }
-
-    // 确认训练序列：是否有 active/rest 对
-    const active = byType.get('active');
-    const rest = byType.get('rest');
-    const hasIntervals = active && rest && active.noOfSplits > 0;
-
-    const result: ReturnType<typeof expandWorkoutSegments> = [];
-
-    const pushIfValid = (tuple: ReturnType<typeof makeSegmentTuple>) => {
-        if (tuple) result.push(tuple);
+    return {
+        schema: LAP_SCHEMA,
+        data
     };
-
-    // warmup
-    const warmup = byType.get('warmup');
-    if (warmup && warmup.durationSec > 0) {
-        pushIfValid(makeSegmentTuple('warmup', warmup, 1));
-    }
-
-    // active ↔ rest 交替展开
-    if (hasIntervals) {
-        const repeats = Math.max(active!.noOfSplits, rest!.noOfSplits);
-        for (let i = 0; i < repeats; i++) {
-            pushIfValid(
-                makeSegmentTuple('active', active!, active!.noOfSplits)
-            );
-            pushIfValid(makeSegmentTuple('rest', rest!, rest!.noOfSplits));
-        }
-    } else {
-        // 没有 interval 对的单个 active 段
-        if (active && active.durationSec > 0) {
-            pushIfValid(makeSegmentTuple('active', active, active.noOfSplits));
-        }
-    }
-
-    // cooldown
-    const cooldown = byType.get('cooldown');
-    if (cooldown && cooldown.durationSec > 0) {
-        pushIfValid(makeSegmentTuple('cooldown', cooldown, 1));
-    }
-
-    return result;
 };
 
-/** 将聚合段数据平摊为单个分段的 tuple */
-const makeSegmentTuple = (
-    type: string,
-    agg: {
-        noOfSplits: number;
-        distanceM: number;
-        durationSec: number;
-        avgHr: number | null;
-        maxHr: number | null;
-        avgCadence: number | null;
-    },
-    totalSplits: number
-):
-    | [
-          string,
-          number,
-          number,
-          string,
-          number | null,
-          number | null,
-          number | null
-      ]
-    | null => {
-    if (totalSplits <= 0 || agg.durationSec <= 0) return null;
-    const perDistanceM = agg.distanceM / totalSplits;
-    const perDurationSec = agg.durationSec / totalSplits;
-    return [
-        type,
-        round(perDistanceM / 1000, 2) ?? 0,
-        round(perDurationSec / 60, 1) ?? 0,
-        paceFromDistance(perDistanceM, perDurationSec) ?? '',
-        agg.avgHr,
-        agg.maxHr,
-        agg.avgCadence
-    ];
-};
-
-const WORKOUT_SEGMENT_SCHEMA = [
+const LAP_SCHEMA = [
     'type',
     'distanceKm',
     'durationMin',
     'pace',
     'avgHr',
     'maxHr',
-    'avgCadence'
-] as const;
-
-const buildWorkoutStructure = (
-    detail: LooseRecord,
-    label: string
-): NonNullable<ActivityDetailSummary['workoutStructure']> => {
-    const segments = expandWorkoutSegments(detail);
-    return {
-        available: workoutId(detail) !== null || segments.length > 0,
-        type: inferWorkoutType(detail.activityName, label),
-        segmentSchema: [...WORKOUT_SEGMENT_SCHEMA],
-        segments
-    };
-};
+    'avgCadence',
+    'elevGainM',
+    'strideCm',
+    'vertOscCm',
+    'vertRatio',
+    'gctMs',
+    'gctBalanceL',
+    'avgTempC'
+];
 
 const LIST_WORKOUT_SEGMENT_SCHEMA = [
     'type',
@@ -571,34 +497,59 @@ const buildDetailRunForm = (summary: LooseRecord) => ({
     verticalRatio: roundNumber(summary.verticalRatio, 1)
 });
 
-const buildSensors = (detail: LooseRecord) => {
-    const sensors = detail.metadataDTO?.sensors ?? [];
-    const hasStryd = sensors.some(
-        (sensor: LooseRecord) =>
-            typeof sensor.manufacturer === 'string' &&
-            sensor.manufacturer.toLowerCase() === 'stryd'
-    );
-    const hasHeartRateSensor = sensors.some((sensor: LooseRecord) => {
-        const source = [
-            sensor.manufacturer,
-            sensor.sourceType,
-            sensor.antplusDeviceType
-        ]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-        return source.includes('heart') || source.includes('hrm');
-    });
+/** 将课表 steps 展开为平铺的步骤列表（解析 REPEAT 控制步骤） */
+const compactWorkout = (
+    workouts: ActivityWorkout[]
+): NonNullable<ActivityDetailSummary['workout']> | undefined => {
+    if (!workouts?.length) return undefined;
+    const w = workouts[0]; // 取第一个课表
+    const name = w.workoutName || null;
 
+    // 解析 REPEAT 结构，展开为平铺步骤
+    const flatSteps: NonNullable<ActivityDetailSummary['workout']>['steps'] =
+        [];
+    const steps = w.steps;
+    for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        if (s.durationType === 'REPEAT_UNTIL_STEPS_CMPLT') {
+            // 这是一个重复控制步骤：重复前面最后 N 个步骤
+            const repeatCount = Math.round(s.targetValue ?? 1);
+            const stepsToRepeat = Math.round(s.durationValue);
+            const start = flatSteps.length - stepsToRepeat;
+            const end = flatSteps.length; // 固定边界，避免 push 导致无限循环
+            for (let r = 0; r < repeatCount; r++) {
+                for (let j = start; j < end; j++) {
+                    flatSteps.push([...flatSteps[j]]);
+                }
+            }
+        } else if (s.intensity) {
+            // 普通步骤：保留原始 durationValue（不做单位转换），携带 durationType 和 targetType 让消费者自行解读
+            const durType = s.durationType?.toLowerCase() ?? 'time';
+            flatSteps.push([
+                s.intensity.toLowerCase(),
+                durType,
+                s.durationValue,
+                s.targetType?.toLowerCase() ?? null,
+                roundNumber(s.targetValueLow),
+                roundNumber(s.targetValueHigh)
+            ]);
+        }
+    }
     return {
-        heartRate: hasHeartRateSensor,
-        runPower:
-            detail.metadataDTO?.hasPowerTimeInZones === true ||
-            detail.metadataDTO?.hasRunPowerWindData === true ||
-            hasStryd,
-        stryd: hasStryd
+        name,
+        schema: WORKOUT_SCHEMA,
+        steps: flatSteps
     };
 };
+
+const WORKOUT_SCHEMA = [
+    'intensity',
+    'durationType',
+    'durationValue',
+    'targetType',
+    'targetLow',
+    'targetHigh'
+];
 
 const normalizeMovementType = (
     splitType: string | null | undefined
@@ -651,17 +602,18 @@ const buildDetailAiHints = (
     anaerobicTE: number | null,
     runForm: ActivityDetailSummary['runForm'],
     bodyBatteryDelta: number | null,
-    workoutStructure: NonNullable<ActivityDetailSummary['workoutStructure']>,
+    laps: ActivityDetailSummary['laps'],
     movementBreakdown: NonNullable<ActivityDetailSummary['movementBreakdown']>
 ): string[] => {
     const hints: string[] = [];
-    if (workoutStructure.available) hints.push('structured_workout');
-    if (workoutStructure.type) hints.push(`${workoutStructure.type}_workout`);
-    // tuple: [type, distanceKm, durationMin, pace, avgHr, maxHr, avgCadence]
-    const activeCount = workoutStructure.segments.filter(
-        (seg) => seg[0] === 'active'
-    ).length;
-    if (activeCount > 1) hints.push(`${activeCount}_active_intervals`);
+    // laps tuple: [type, distanceKm, durationMin, pace, avgHr, maxHr, avgCadence, elevGainM, avgTempC]
+    const lapData = laps?.data ?? [];
+    // 从 laps 统计 active/rest 段
+    const activeLaps = lapData.filter((seg) => seg[0] === 'active');
+    const restLaps = lapData.filter((seg) => seg[0] === 'rest');
+    if (activeLaps.length > 1)
+        hints.push(`${activeLaps.length}_active_intervals`);
+
     if (label && label !== 'unknown') hints.push(`${label}_run`);
     if ((aerobicTE ?? 0) >= 4) hints.push('high_aerobic_stimulus');
     else if ((aerobicTE ?? 0) >= 2.5) {
@@ -675,19 +627,37 @@ const buildDetailAiHints = (
     if ((bodyBatteryDelta ?? 0) <= -8 && (bodyBatteryDelta ?? 0) > -20) {
         hints.push('body_battery_moderate_drain');
     }
-    const totalActiveMin = workoutStructure.segments
-        .filter((seg) => seg[0] === 'active')
-        .reduce((sum, seg) => sum + (seg[2] as number), 0);
+    const totalActiveMin = activeLaps.reduce(
+        (sum, seg) => sum + ((seg[2] as number) ?? 0),
+        0
+    );
     if (totalActiveMin >= 20) hints.push('meaningful_training_load');
-    const restSeg = workoutStructure.segments.find((seg) => seg[0] === 'rest');
-    const restHr = restSeg?.[4];
+    // rest HR vs run HR 对比
+    const avgRestHr =
+        restLaps.length > 0
+            ? restLaps.reduce(
+                  (sum, seg) => sum + ((seg[4] as number) ?? 0),
+                  0
+              ) / restLaps.length
+            : null;
     const runHr = movementBreakdown.run?.avgHr;
-    if (restHr !== null && restHr !== undefined && (runHr ?? 0) > 0) {
-        if (restHr >= (runHr ?? 0)) {
-            hints.push(
-                'rest_hr_high_indicates_incomplete_recovery_between_reps'
-            );
-        }
+    if (
+        avgRestHr !== null &&
+        avgRestHr > 0 &&
+        (runHr ?? 0) > 0 &&
+        avgRestHr >= (runHr ?? 0)
+    ) {
+        hints.push('rest_hr_high_indicates_incomplete_recovery_between_reps');
+    }
+    // 温度提示（index 13 = avgTempC）
+    const temps = lapData
+        .map((seg) => seg[13] as number | null)
+        .filter((t): t is number => t !== null);
+    if (temps.length > 0) {
+        const minT = Math.min(...temps);
+        const maxT = Math.max(...temps);
+        if (minT <= 5) hints.push('cold_weather_workout');
+        if (maxT >= 30) hints.push('hot_weather_workout');
     }
     return Array.from(new Set(hints));
 };
@@ -705,8 +675,6 @@ export const buildActivitiesSummary = async (
 ): Promise<ActivitiesSummary> => {
     await client.checkTokenVaild();
 
-    const rangeDays = options.rangeDays ?? options.recentDays ?? 7;
-    const range = getRange({ ...options, recentDays: rangeDays }, 7);
     const activities = await api.getActivities(
         options.start ?? 0,
         options.limit ?? 20,
@@ -731,11 +699,6 @@ export const buildActivitiesSummary = async (
 
     return {
         schema: 'activities_summary_v1',
-        range: {
-            start: range.startDateString,
-            end: range.endDateString,
-            days: rangeDays
-        },
         summary: {
             activities: compactActivities.length,
             sports: summarizeSports(compactActivities),
@@ -771,9 +734,21 @@ export const buildActivityDetailSummary = async (
 ): Promise<ActivityDetailSummary> => {
     await client.checkTokenVaild();
 
-    const detail = (await api.getActivity({
-        activityId: options.activityId
-    })) as unknown as LooseRecord;
+    // 先获取详情（数据量大），处理后让 GC 回收原始响应
+    const detailRaw = await api.getActivity({ activityId: options.activityId });
+    // 再并行获取 laps、天气、课表
+    const [lapsRes, weatherRaw, workoutsRaw] = await Promise.all([
+        api
+            .getActivityLaps({ activityId: options.activityId })
+            .catch(() => null),
+        api
+            .getActivityWeather({ activityId: options.activityId })
+            .catch(() => null),
+        api
+            .getActivityWorkouts({ activityId: options.activityId })
+            .catch(() => null)
+    ]);
+    const detail = detailRaw as unknown as LooseRecord;
     const summary = detailSummary(detail);
     const startTime = summary.startTimeLocal ?? detail.startTimeLocal;
     const effect = buildTrainingEffect(summary);
@@ -781,11 +756,31 @@ export const buildActivityDetailSummary = async (
     const load = roundNumber(summary.activityTrainingLoad);
     const bodyBatteryDelta = roundNumber(summary.differenceBodyBattery);
     const runForm = buildDetailRunForm(summary);
-    const id = workoutId(detail);
-    const workoutStructure = buildWorkoutStructure(detail, label);
+    const wkId = workoutId(detail);
+    const lapList = lapsRes as { lapDTOs: ActivityLap[] } | null;
+    const laps = lapList?.lapDTOs?.length
+        ? compactLaps(lapList.lapDTOs)
+        : undefined;
+    const workoutData = workoutsRaw as ActivityWorkout[] | null;
+    const workout = compactWorkout(workoutData ?? []);
     const movementBreakdown = buildMovementBreakdown(detail);
+    // 天气：华氏度→摄氏度
+    const weatherRaw2 = weatherRaw as ActivityWeather | null;
+    const weather: ActivityDetailSummary['weather'] = weatherRaw2
+        ? {
+              tempC: fToC(weatherRaw2.temp),
+              apparentTempC: fToC(weatherRaw2.apparentTemp),
+              dewPointC: fToC(weatherRaw2.dewPoint),
+              relativeHumidity: roundNumber(weatherRaw2.relativeHumidity),
+              windDirection: roundNumber(weatherRaw2.windDirection),
+              windDirectionCompass:
+                  weatherRaw2.windDirectionCompassPoint ?? null,
+              windSpeed: roundNumber(weatherRaw2.windSpeed),
+              condition: weatherRaw2.weatherTypeDTO?.desc ?? null
+          }
+        : undefined;
 
-    return {
+    const result: ActivityDetailSummary = {
         schema: 'activity_detail_v1',
         id: detail.activityId,
         date: compactDate(startTime),
@@ -794,8 +789,8 @@ export const buildActivityDetailSummary = async (
         subSport: sportKey(detail),
         name: detail.activityName ?? null,
         location: detail.locationName ?? null,
-        isStructuredWorkout: workoutStructure.available,
-        workoutId: id,
+        isStructuredWorkout: wkId !== null,
+        workoutId: wkId,
         summary: {
             distanceKm: roundNumber(summary.distance / 1000, 2),
             durationMin: roundNumber((numeric(summary.duration) ?? 0) / 60, 1),
@@ -848,17 +843,23 @@ export const buildActivityDetailSummary = async (
                     summary.workoutComplianceScore
             )
         },
-        sensors: buildSensors(detail),
-        workoutStructure,
         movementBreakdown,
-        aiHints: buildDetailAiHints(
-            label,
-            effect.aerobic,
-            effect.anaerobic,
-            runForm,
-            bodyBatteryDelta,
-            workoutStructure!,
-            movementBreakdown!
-        )
+        aiHints: []
     };
+
+    if (laps) result.laps = laps;
+    if (workout) result.workout = workout;
+    if (weather) result.weather = weather;
+
+    result.aiHints = buildDetailAiHints(
+        label,
+        effect.aerobic,
+        effect.anaerobic,
+        runForm,
+        bodyBatteryDelta,
+        laps,
+        movementBreakdown!
+    );
+
+    return result;
 };

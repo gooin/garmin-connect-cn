@@ -14,8 +14,7 @@ export interface TrainingOverviewOptions extends CoachDateRangeOptions {
     trendDays?: number;
 }
 
-export interface ActivitiesSummaryOptions extends CoachDateRangeOptions {
-    rangeDays?: number;
+export interface ActivitiesSummaryOptions {
     start?: number;
     limit?: number;
     activityType?: string;
@@ -74,11 +73,6 @@ export interface CompactActivity {
 
 export interface ActivitiesSummary {
     schema: 'activities_summary_v1';
-    range: {
-        start: string;
-        end: string;
-        days: number;
-    };
     summary: {
         activities: number;
         sports: Record<
@@ -159,24 +153,45 @@ export interface ActivityDetailSummary {
         rpe: number | null;
         complianceScore: number | null;
     };
-    sensors?: {
-        heartRate: boolean;
-        runPower: boolean;
-        stryd: boolean;
-    };
-    workoutStructure?: {
-        available: boolean;
-        type: string | null;
-        /** 说明 segments 数组每个索引对应的字段名 */
-        segmentSchema: string[];
-        /** 按训练顺序展开的每个分段，将聚合数据平摊到每个子段 */
-        segments: Array<
+    laps?: {
+        /** 说明 laps 数组每个索引对应的字段名 */
+        schema: string[];
+        /** 按顺序的每圈真实数据 */
+        data: Array<
             [
                 string,
                 number,
                 number,
                 string,
                 number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null,
+                number | null
+            ]
+        >;
+    };
+    /** 课表计划（仅结构化训练有），与 laps 搭配对照计划vs实际 */
+    workout?: {
+        name: string | null;
+        /** steps 各字段含义：intensity, durationType, durationValue, targetType, targetLow, targetHigh */
+        schema: string[];
+        /**
+         * 按顺序的课表步骤（REPEAT 已展开）
+         * durationType: time(秒)/distance(米)/hr/calories/lap_button/repeat_until_steps_cmplt
+         * targetType: power(w)/heart_rate(bpm)/pace/ speed/cadence/null
+         */
+        steps: Array<
+            [
+                string,
+                string,
+                number,
+                string | null,
                 number | null,
                 number | null
             ]
@@ -191,7 +206,93 @@ export interface ActivityDetailSummary {
             avgHr: number | null;
         }
     >;
+    weather?: {
+        tempC: number | null;
+        apparentTempC: number | null;
+        dewPointC: number | null;
+        relativeHumidity: number | null;
+        windDirection: number | null;
+        windDirectionCompass: string | null;
+        windSpeed: number | null;
+        condition: string | null;
+    };
     aiHints: string[];
+}
+
+/** 活动 lap 原始数据 */
+export interface ActivityLap {
+    startTimeGMT: string;
+    distance: number;
+    duration: number;
+    movingDuration: number;
+    elapsedDuration: number;
+    elevationGain: number;
+    averageSpeed: number;
+    maxSpeed: number;
+    calories: number;
+    averageHR: number;
+    maxHR: number;
+    averageRunCadence: number;
+    maxRunCadence: number;
+    averageTemperature: number;
+    groundContactTime: number;
+    groundContactBalanceLeft: number;
+    strideLength: number;
+    verticalOscillation: number;
+    verticalRatio: number;
+    avgGradeAdjustedSpeed: number;
+    lapIndex: number;
+    wktStepIndex?: number;
+    intensityType: string;
+    messageIndex: number;
+}
+
+/** 活动课表步骤原始数据 */
+export interface ActivityWorkoutStep {
+    stepIndex: number;
+    name: string | null;
+    intensity: string | null;
+    durationType: string;
+    durationValue: number;
+    targetType: string | null;
+    targetValue: number | null;
+    targetValueLow: number | null;
+    targetValueHigh: number | null;
+    notes: string | null;
+}
+
+/** 活动课表原始数据 */
+export interface ActivityWorkout {
+    index: number;
+    workoutName: string;
+    timeCreated: string;
+    sport: string;
+    manufacturer: string;
+    steps: ActivityWorkoutStep[];
+}
+
+/** 活动天气原始数据（温度单位：华氏度） */
+export interface ActivityWeather {
+    issueDate: string;
+    temp: number;
+    apparentTemp: number;
+    dewPoint: number;
+    relativeHumidity: number;
+    windDirection: number;
+    windDirectionCompassPoint: string;
+    windSpeed: number;
+    windGust: number | null;
+    latitude: number;
+    longitude: number;
+    weatherStationDTO: {
+        id: string;
+        name: string;
+    };
+    weatherTypeDTO: {
+        weatherTypePk: number | null;
+        desc: string;
+        image: string | null;
+    };
 }
 
 export interface WellnessOverview {
@@ -414,6 +515,45 @@ export interface TrainingOverview {
         recovery: boolean;
         recentActivities: boolean;
         subjectiveFeedback: boolean;
+        personalRecords: boolean;
     };
+    /** 个人记录，只包含已达成(maxValue>0)的项目 */
+    personalRecords?: PersonalRecordSummary[];
     aiHints: string[];
+}
+
+/** Garmin PR 类型定义 API 原始响应项 */
+export interface PersonalRecordType {
+    id: number;
+    key: string;
+    visible: boolean;
+    sport: string;
+    minValue: number;
+    maxValue: number;
+}
+
+/** Garmin PR 实际记录 API 原始响应项 */
+export interface PersonalRecord {
+    id: number;
+    typeId: number;
+    status: string;
+    activityId: number;
+    activityName: string | null;
+    activityType: string | null;
+    activityStartDateTimeInGMT: number | null;
+    activityStartDateTimeLocalFormatted: string | null;
+    value: number;
+    prStartTimeGmtFormatted: string | null;
+    prStartTimeLocalFormatted: string | null;
+}
+
+/** 精简的个人记录摘要（含格式化值和日期） */
+export interface PersonalRecordSummary {
+    type: string;
+    sport: string;
+    /** 格式化的值：时间类为 "mm:ss" 或 "h:mm:ss"，距离/步数等为数字 */
+    value: string;
+    unit: string;
+    /** 达成日期 YYYY-MM-DD */
+    date: string | null;
 }
