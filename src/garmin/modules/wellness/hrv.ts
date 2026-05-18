@@ -1,5 +1,9 @@
-import { toDateString } from '../../common/DateUtils';
-import { HRVData } from '../../types/hrv';
+import { toDateString, toGarminDateString } from '../../common/DateUtils';
+import {
+    HRVData,
+    HRVDailySummary,
+    HRVDailySummaryResponse
+} from '../../types/hrv';
 import { ModuleConstructor } from '../types';
 
 export function applyHRVModule(Base: ModuleConstructor) {
@@ -13,6 +17,26 @@ export function applyHRVModule(Base: ModuleConstructor) {
                 return hrvData;
             } catch (error: any) {
                 throw new Error(`Error in getHRVData: ${error.message}`);
+            }
+        }
+
+        async getHRVDailySummary(
+            startDate: Date | string,
+            endDate: Date | string
+        ): Promise<HRVDailySummary[]> {
+            try {
+                const startStr = toGarminDateString(startDate);
+                const endStr = toGarminDateString(endDate);
+                const response = await this.client.get<
+                    HRVDailySummary[] | HRVDailySummaryResponse
+                >(`${this.url.HRV_DAILY_SUMMARY}/${startStr}/${endStr}`);
+                return Array.isArray(response)
+                    ? response
+                    : response.hrvSummaries ?? [];
+            } catch (error: any) {
+                throw new Error(
+                    `Error in getHRVDailySummary: ${error.message}`
+                );
             }
         }
     };

@@ -29,6 +29,7 @@ import { applyDeviceModule } from './modules/device';
 import { applyWorkoutModule } from './modules/workout';
 import { applyCourseModule } from './modules/course';
 import { applyMiscModule } from './modules/misc';
+import { applyCoachModule } from './modules/coach';
 
 export interface Session {}
 
@@ -148,5 +149,6 @@ const WithDevice = applyDeviceModule(WithTrainingStatus);
 const WithWorkout = applyWorkoutModule(WithDevice);
 const WithCourse = applyCourseModule(WithWorkout);
 const WithMisc = applyMiscModule(WithCourse);
+const WithCoach = applyCoachModule(WithMisc);
 
-export default class GarminConnect extends WithMisc {}
+export default class GarminConnect extends WithCoach {}

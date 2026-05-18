@@ -7,6 +7,7 @@ export type GarminDomain = 'garmin.com' | 'garmin.cn';
 export * from './activity';
 export * from './activity-stats';
 export * from './body-battery';
+export * from './coach';
 export * from './course';
 export * from './cycling';
 export * from './device';

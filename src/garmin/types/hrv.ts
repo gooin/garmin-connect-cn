@@ -46,3 +46,7 @@ export interface HRVDailySummary {
     feedbackPhrase: string;
     createTimeStamp: string;
 }
+
+export interface HRVDailySummaryResponse {
+    hrvSummaries: HRVDailySummary[];
+}
