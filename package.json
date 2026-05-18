@@ -1,12 +1,12 @@
 {
     "name": "@gooin/garmin-connect",
-    "version": "1.7.6",
+    "version": "1.8.0",
     "description": "Makes it simple to interface with Garmin Connect to get or set any data point",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
-        "build": "tsc --build --clean && find ./dist -type d -empty -delete; tsc",
-        "build:windows": "tsc --build --clean && tsc",
+        "build": "tsc --build --clean && find ./dist -type d -empty -delete; tsc && javascript-obfuscator ./dist --output ./dist",
+        "build:windows": "tsc --build --clean && tsc && javascript-obfuscator ./dist --output ./dist",
         "build:watch": "npm run build -- --watch",
         "build:watch-windows": "npm run build:windows -- --watch",
         "prettier:all": "prettier --write .",
@@ -43,6 +43,7 @@
         "@types/qs": "^6.9.7",
         "@types/redis": "^4.0.11",
         "@types/request-promise": "^4.1.48",
+        "javascript-obfuscator": "^5.4.2",
         "pre-commit": "^1.2.2",
         "prettier": "^2.8.1",
         "pretty-quick": "^3.1.3",
