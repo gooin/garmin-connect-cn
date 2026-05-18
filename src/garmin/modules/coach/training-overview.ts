@@ -182,59 +182,81 @@ export const buildTrainingOverview = async (
     const snapshotDate = activityRange.endDateString;
 
     const [
-        personalInfo,
-        trainingStatus,
-        loadBalanceResponse,
-        weeklyTrainingStatus,
-        runningActivityStats,
-        cyclingActivityStats,
-        racePredictions,
-        lactateThreshold,
+        userRes,
+        currentRes,
+        loadBalanceRes,
+        weekly,
+        runningStats,
+        cyclingStats,
+        latestRacePrediction,
+        lactateThresholdByDate,
         latestPowerToWeight,
         cyclingAbility,
         cyclingMaxMet,
-        personalRecordTypes,
-        personalRecordsRaw
+        personalRecords
     ] = await Promise.all([
-        capture('personalInfo', errors, () => api.getPersonalInfo()),
-        capture('trainingStatus', errors, () =>
-            api.getTrainingStatus(activityRange.endDate)
+        capture('personalInfo', errors, async () =>
+            extractUser(await api.getPersonalInfo())
         ),
-        capture('trainingLoadBalance', errors, () =>
-            api.getTrainingLoadBalance(activityRange.endDate)
-        ),
-        capture('weeklyTrainingStatus', errors, () =>
-            api.getWeeklyTrainingStatus(
-                trendRange.startDate,
-                trendRange.endDate
+        capture('trainingStatus', errors, async () =>
+            extractCurrentTrainingStatus(
+                await api.getTrainingStatus(activityRange.endDate)
             )
         ),
-        capture('runningActivityStats', errors, () =>
-            api.getActivityStats({
-                startDate: activityRange.startDateString,
-                endDate: activityRange.endDateString,
-                activityType: 'running'
-            })
+        capture('trainingLoadBalance', errors, async () =>
+            extractLoadBalance(
+                await api.getTrainingLoadBalance(activityRange.endDate)
+            )
         ),
-        capture('cyclingActivityStats', errors, () =>
-            api.getActivityStats({
-                startDate: activityRange.startDateString,
-                endDate: activityRange.endDateString,
-                activityType: 'cycling'
-            })
+        capture('weeklyTrainingStatus', errors, async () =>
+            compactTrainingStatuses(
+                await api.getWeeklyTrainingStatus(
+                    trendRange.startDate,
+                    trendRange.endDate
+                )
+            )
         ),
-        capture('racePredictions', errors, () =>
-            api.getRacePredictionsMonthly(
+        capture('runningActivityStats', errors, async () =>
+            latestActivityStats(
+                (await api.getActivityStats({
+                    startDate: activityRange.startDateString,
+                    endDate: activityRange.endDateString,
+                    activityType: 'running'
+                })) ?? []
+            )
+        ),
+        capture('cyclingActivityStats', errors, async () =>
+            latestActivityStats(
+                (await api.getActivityStats({
+                    startDate: activityRange.startDateString,
+                    endDate: activityRange.endDateString,
+                    activityType: 'cycling'
+                })) ?? []
+            )
+        ),
+        capture('racePredictions', errors, async () => {
+            const res = await api.getRacePredictionsMonthly(
                 trendRange.startDateString,
                 trendRange.endDateString
-            )
-        ),
-        capture('lactateThreshold', errors, () =>
-            api.getRunningLactateThreshold(
+            );
+            return (
+                res
+                    ?.slice()
+                    .sort((a, b) =>
+                        a.calendarDate.localeCompare(b.calendarDate)
+                    )
+                    .pop() ?? null
+            );
+        }),
+        capture('lactateThreshold', errors, async () => {
+            const res = await api.getRunningLactateThreshold(
                 trendRange.startDateString,
                 trendRange.endDateString
-            )
-        ),
+            );
+            return res?.latest
+                ?.slice()
+                .sort((a, b) => a.calendarDate.localeCompare(b.calendarDate));
+        }),
         capture('latestPowerToWeight', errors, () =>
             api.getLatestPowerToWeight(activityRange.endDateString)
         ),
@@ -242,20 +264,21 @@ export const buildTrainingOverview = async (
         capture('cyclingMaxMet', errors, () =>
             api.getMaxMet(activityRange.endDateString, 'cycling')
         ),
-        capture('personalRecordTypes', errors, () =>
-            api.getPersonalRecordTypes()
-        ),
-        capture('personalRecords', errors, () => api.getPersonalRecords())
+        capture('personalRecords', errors, async () => {
+            const [types, records] = await Promise.all([
+                api.getPersonalRecordTypes().catch(() => null),
+                api.getPersonalRecords().catch(() => null)
+            ]);
+            return compactPersonalRecords(types ?? null, records ?? null);
+        })
     ]);
 
-    const user = extractUser(personalInfo);
-    const current = extractCurrentTrainingStatus(trainingStatus);
-    const loadBalance = extractLoadBalance(loadBalanceResponse);
-    const weekly = compactTrainingStatuses(weeklyTrainingStatus);
-    const runningStats = latestActivityStats(runningActivityStats ?? []);
-    const cyclingStats = latestActivityStats(cyclingActivityStats ?? []);
-    const runningAvailable = hasSportStats(runningStats);
-    const cyclingAvailable = hasSportStats(cyclingStats);
+    const user = userRes ?? extractUser(null);
+    const current = currentRes ?? null;
+    const loadBalance = loadBalanceRes ?? null;
+    const weeklyStatus = weekly ?? [];
+    const runningAvailable = hasSportStats(runningStats ?? null);
+    const cyclingAvailable = hasSportStats(cyclingStats ?? null);
     const observedSports = [
         ...(runningAvailable ? ['running'] : []),
         ...(cyclingAvailable ? ['cycling'] : [])
@@ -283,21 +306,21 @@ export const buildTrainingOverview = async (
                 ? 'running'
                 : 'cycling'
             : null;
-    const latestRacePrediction =
-        racePredictions
-            ?.slice()
-            .sort((a, b) => a.calendarDate.localeCompare(b.calendarDate))
-            .pop() ?? null;
-    const latestThresholdByDate = lactateThreshold?.latest
-        ?.slice()
-        .sort((a, b) => a.calendarDate.localeCompare(b.calendarDate));
+    const acute = current?.acuteTrainingLoadDTO as any;
+    const acuteLoad =
+        acute?.dailyTrainingLoadAcute ?? current?.weeklyTrainingLoad ?? null;
+    const chronicLoad =
+        acute?.dailyTrainingLoadChronic ?? current?.loadTunnelMax ?? null;
+    const acwr =
+        acute?.dailyAcuteChronicWorkloadRatio ??
+        (acuteLoad !== null && chronicLoad ? acuteLoad / chronicLoad : null);
     const latestSpeedThreshold =
-        latestThresholdByDate
+        lactateThresholdByDate
             ?.slice()
             .reverse()
             .find((entry) => entry.speed !== null) ?? null;
     const latestHrThreshold =
-        latestThresholdByDate
+        lactateThresholdByDate
             ?.slice()
             .reverse()
             .find(
@@ -307,18 +330,6 @@ export const buildTrainingOverview = async (
             ) ?? null;
     const cyclingPower = findPowerToWeight(latestPowerToWeight, 'CYCLING');
     const runningPower = findPowerToWeight(latestPowerToWeight, 'RUNNING');
-    const acute = current?.acuteTrainingLoadDTO as any;
-    const acuteLoad =
-        acute?.dailyTrainingLoadAcute ?? current?.weeklyTrainingLoad ?? null;
-    const chronicLoad =
-        acute?.dailyTrainingLoadChronic ?? current?.loadTunnelMax ?? null;
-    const acwr =
-        acute?.dailyAcuteChronicWorkloadRatio ??
-        (acuteLoad !== null && chronicLoad ? acuteLoad / chronicLoad : null);
-    const personalRecords = compactPersonalRecords(
-        personalRecordTypes ?? null,
-        personalRecordsRaw ?? null
-    );
 
     const overview: TrainingOverview = {
         schema: 'training_overview_v1',
@@ -474,11 +485,11 @@ export const buildTrainingOverview = async (
             note: 'swimming_not_available_in_this_overview_source'
         },
         trend90d: {
-            statusDays: countStatusDays(weekly),
-            load: buildTrendLoad(weekly)
+            statusDays: countStatusDays(weeklyStatus),
+            load: buildTrendLoad(weeklyStatus)
         },
         dataCompleteness: {
-            profile: personalInfo !== null,
+            profile: userRes !== null,
             trainingStatus: current !== null,
             loadBalance: loadBalance !== null,
             runningStats: runningAvailable,

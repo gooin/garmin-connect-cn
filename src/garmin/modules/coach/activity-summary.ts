@@ -734,8 +734,81 @@ export const buildActivityDetailSummary = async (
 ): Promise<ActivityDetailSummary> => {
     await client.checkTokenVaild();
 
-    // 先获取详情（数据量大），处理后让 GC 回收原始响应
-    const detailRaw = await api.getActivity({ activityId: options.activityId });
+    // 获取详情（数据量大），在闭包内处理后即可释放内存
+    const detailData = await (async () => {
+        const detailRaw = await api.getActivity({
+            activityId: options.activityId
+        });
+        const detail = detailRaw as unknown as LooseRecord;
+        const summary = detailSummary(detail);
+        const effect = buildTrainingEffect(summary);
+
+        return {
+            id: detail.activityId,
+            sport: primarySport(detail),
+            subSport: sportKey(detail),
+            name: detail.activityName ?? null,
+            location: detail.locationName ?? null,
+            wkId: workoutId(detail),
+            startTime: summary.startTimeLocal ?? detail.startTimeLocal,
+            effect,
+            label: effect.label,
+            load: roundNumber(summary.activityTrainingLoad),
+            bodyBatteryDelta: roundNumber(summary.differenceBodyBattery),
+            runForm: buildDetailRunForm(summary),
+            movementBreakdown: buildMovementBreakdown(detail),
+            summaryStats: {
+                distanceKm: roundNumber(summary.distance / 1000, 2),
+                durationMin: roundNumber(
+                    (numeric(summary.duration) ?? 0) / 60,
+                    1
+                ),
+                movingMin: roundNumber(
+                    (numeric(summary.movingDuration) ?? 0) / 60,
+                    1
+                ),
+                elapsedMin: roundNumber(
+                    (numeric(summary.elapsedDuration) ?? 0) / 60,
+                    1
+                ),
+                pace: paceFromDistance(summary.distance, summary.duration),
+                gapPace: paceFromSpeed(summary.avgGradeAdjustedSpeed),
+                avgHr: roundNumber(summary.averageHR),
+                maxHr: roundNumber(summary.maxHR),
+                calories: roundNumber(summary.calories),
+                elevGainM: roundNumber(summary.elevationGain),
+                elevLossM: roundNumber(summary.elevationLoss),
+                avgTempC: roundNumber(summary.averageTemperature)
+            },
+            trainingImpactStats: {
+                aerobicMessage: normalizeMessage(
+                    summary.aerobicTrainingEffectMessage
+                ),
+                anaerobicMessage: normalizeMessage(
+                    summary.anaerobicTrainingEffectMessage
+                ),
+                recoveryHr: roundNumber(summary.recoveryHeartRate)
+            },
+            intensity: {
+                moderateMin: roundNumber(summary.moderateIntensityMinutes),
+                vigorousMin: roundNumber(summary.vigorousIntensityMinutes)
+            },
+            stamina: {
+                begin: roundNumber(summary.beginPotentialStamina),
+                end: roundNumber(summary.endPotentialStamina),
+                minAvailable: roundNumber(summary.minAvailableStamina)
+            },
+            subjective: {
+                feel: roundNumber(summary.directWorkoutFeel),
+                rpe: roundNumber(summary.directWorkoutRpe),
+                complianceScore: roundNumber(
+                    summary.directWorkoutComplianceScore ??
+                        summary.workoutComplianceScore
+                )
+            }
+        };
+    })();
+
     // 再并行获取 laps、天气、课表
     const [lapsRes, weatherRaw, workoutsRaw] = await Promise.all([
         api
@@ -748,22 +821,14 @@ export const buildActivityDetailSummary = async (
             .getActivityWorkouts({ activityId: options.activityId })
             .catch(() => null)
     ]);
-    const detail = detailRaw as unknown as LooseRecord;
-    const summary = detailSummary(detail);
-    const startTime = summary.startTimeLocal ?? detail.startTimeLocal;
-    const effect = buildTrainingEffect(summary);
-    const label = effect.label;
-    const load = roundNumber(summary.activityTrainingLoad);
-    const bodyBatteryDelta = roundNumber(summary.differenceBodyBattery);
-    const runForm = buildDetailRunForm(summary);
-    const wkId = workoutId(detail);
+
     const lapList = lapsRes as { lapDTOs: ActivityLap[] } | null;
     const laps = lapList?.lapDTOs?.length
         ? compactLaps(lapList.lapDTOs)
         : undefined;
     const workoutData = workoutsRaw as ActivityWorkout[] | null;
     const workout = compactWorkout(workoutData ?? []);
-    const movementBreakdown = buildMovementBreakdown(detail);
+
     // 天气：华氏度→摄氏度
     const weatherRaw2 = weatherRaw as ActivityWeather | null;
     const weather: ActivityDetailSummary['weather'] = weatherRaw2
@@ -782,68 +847,31 @@ export const buildActivityDetailSummary = async (
 
     const result: ActivityDetailSummary = {
         schema: 'activity_detail_v1',
-        id: detail.activityId,
-        date: compactDate(startTime),
-        startTime: compactTime(startTime),
-        sport: primarySport(detail),
-        subSport: sportKey(detail),
-        name: detail.activityName ?? null,
-        location: detail.locationName ?? null,
-        isStructuredWorkout: wkId !== null,
-        workoutId: wkId,
-        summary: {
-            distanceKm: roundNumber(summary.distance / 1000, 2),
-            durationMin: roundNumber((numeric(summary.duration) ?? 0) / 60, 1),
-            movingMin: roundNumber(
-                (numeric(summary.movingDuration) ?? 0) / 60,
-                1
-            ),
-            elapsedMin: roundNumber(
-                (numeric(summary.elapsedDuration) ?? 0) / 60,
-                1
-            ),
-            pace: paceFromDistance(summary.distance, summary.duration),
-            gapPace: paceFromSpeed(summary.avgGradeAdjustedSpeed),
-            avgHr: roundNumber(summary.averageHR),
-            maxHr: roundNumber(summary.maxHR),
-            calories: roundNumber(summary.calories),
-            elevGainM: roundNumber(summary.elevationGain),
-            elevLossM: roundNumber(summary.elevationLoss),
-            avgTempC: roundNumber(summary.averageTemperature)
-        },
+        id: detailData.id,
+        date: compactDate(detailData.startTime),
+        startTime: compactTime(detailData.startTime),
+        sport: detailData.sport,
+        subSport: detailData.subSport,
+        name: detailData.name,
+        location: detailData.location,
+        isStructuredWorkout: detailData.wkId !== null,
+        workoutId: detailData.wkId,
+        summary: detailData.summaryStats,
         trainingImpact: {
-            label,
-            load,
-            aerobicTE: effect.aerobic,
-            anaerobicTE: effect.anaerobic,
-            aerobicMessage: normalizeMessage(
-                summary.aerobicTrainingEffectMessage
-            ),
-            anaerobicMessage: normalizeMessage(
-                summary.anaerobicTrainingEffectMessage
-            ),
-            bodyBatteryDelta,
-            recoveryHr: roundNumber(summary.recoveryHeartRate)
+            label: detailData.label,
+            load: detailData.load,
+            aerobicTE: detailData.effect.aerobic,
+            anaerobicTE: detailData.effect.anaerobic,
+            aerobicMessage: detailData.trainingImpactStats.aerobicMessage,
+            anaerobicMessage: detailData.trainingImpactStats.anaerobicMessage,
+            bodyBatteryDelta: detailData.bodyBatteryDelta,
+            recoveryHr: detailData.trainingImpactStats.recoveryHr
         },
-        intensity: {
-            moderateMin: roundNumber(summary.moderateIntensityMinutes),
-            vigorousMin: roundNumber(summary.vigorousIntensityMinutes)
-        },
-        runForm,
-        stamina: {
-            begin: roundNumber(summary.beginPotentialStamina),
-            end: roundNumber(summary.endPotentialStamina),
-            minAvailable: roundNumber(summary.minAvailableStamina)
-        },
-        subjective: {
-            feel: roundNumber(summary.directWorkoutFeel),
-            rpe: roundNumber(summary.directWorkoutRpe),
-            complianceScore: roundNumber(
-                summary.directWorkoutComplianceScore ??
-                    summary.workoutComplianceScore
-            )
-        },
-        movementBreakdown,
+        intensity: detailData.intensity,
+        runForm: detailData.runForm,
+        stamina: detailData.stamina,
+        subjective: detailData.subjective,
+        movementBreakdown: detailData.movementBreakdown,
         aiHints: []
     };
 
@@ -852,13 +880,13 @@ export const buildActivityDetailSummary = async (
     if (weather) result.weather = weather;
 
     result.aiHints = buildDetailAiHints(
-        label,
-        effect.aerobic,
-        effect.anaerobic,
-        runForm,
-        bodyBatteryDelta,
+        detailData.label,
+        detailData.effect.aerobic,
+        detailData.effect.anaerobic,
+        detailData.runForm,
+        detailData.bodyBatteryDelta,
         laps,
-        movementBreakdown!
+        detailData.movementBreakdown!
     );
 
     return result;

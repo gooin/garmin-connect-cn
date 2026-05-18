@@ -23,9 +23,9 @@
 | `activity/training-status.ts` | 运动-训练状态 | `getTrainingStatus`, `getTrainingLoadBalance`, `getWeeklyTrainingStatus`                                                                                                                                                              |
 | `device.ts`                   | 设备          | `getPrimaryWearableDevice`                                                                                                                                                                                                            |
 | `workout.ts`                  | 训练计划      | `getWorkouts`, `getWorkoutDetail`, `addWorkout`, `addRunningWorkout`, `deleteWorkout`, `scheduleWorkout`                                                                                                                              |
-| `course.ts`                   | 课程          | `getCourses`, `getCourse`, `downloadCourseFit`, `downloadCourseGpx`, `importCourse`, `confirmCourseImport`, `deleteCourse`, `createCourse`                                                                                            |
+| `course.ts`                   | 路线          | `getCourses`, `getCourse`, `downloadCourseFit`, `downloadCourseGpx`, `importCourse`, `confirmCourseImport`, `deleteCourse`, `createCourse`                                                                                            |
 | `misc.ts`                     | 其他          | `getCalendar`, `getGolfSummary`, `getGolfScorecard`, `consentGrant`, `get`/`post`/`put`                                                                                                                                               |
-| `coach.ts`                    | AI 教练聚合   | `getTrainingOverview`, `getWellnessOverview`, `getActivitiesSummary`, `getActivityDetailSummary`                                                                                                                                      |
+| `coach.ts`                    | 教练聚合接口  | `getTrainingOverview`, `getWellnessOverview`, `getActivitiesSummary`, `getActivityDetailSummary`                                                                                                                                      |
 
 ### 修改的文件
 

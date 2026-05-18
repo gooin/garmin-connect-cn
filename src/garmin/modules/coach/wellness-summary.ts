@@ -19,7 +19,13 @@ export const buildWellnessSummary = async (
 
     const [todayHrv, recentHrv, bodyBattery, todaySleep, sleepSummary] =
         await Promise.all([
-            capture('todayHrv', errors, () => api.getHRVData(range.endDate)),
+            capture('todayHrv', errors, async () => {
+                const res = await api.getHRVData(range.endDate);
+                return {
+                    hrvSummary: res?.hrvSummary ?? null,
+                    hrvReadingCount: res?.hrvReadings?.length ?? 0
+                };
+            }),
             capture('recentHrv', errors, () =>
                 api.getHRVDailySummary(
                     range.startDateString,
@@ -29,12 +35,28 @@ export const buildWellnessSummary = async (
             capture('bodyBattery', errors, () =>
                 api.getBodyBattery(range.startDateString, range.endDateString)
             ),
-            capture('todaySleep', errors, () =>
-                api.getSleepData(range.endDate)
-            ),
-            capture('sleepSummary', errors, () =>
-                api.getSleepDailySummary(range.startDate, range.endDate)
-            )
+            capture('todaySleep', errors, async () => {
+                const res = await api.getSleepData(range.endDate);
+                if (!res) return null;
+                return {
+                    dailySleepDTO: res.dailySleepDTO ?? null,
+                    avgOvernightHrv: res.avgOvernightHrv,
+                    hrvStatus: res.hrvStatus,
+                    bodyBatteryChange: res.bodyBatteryChange,
+                    restingHeartRate: res.restingHeartRate
+                };
+            }),
+            capture('sleepSummary', errors, async () => {
+                const res = await api.getSleepDailySummary(
+                    range.startDate,
+                    range.endDate
+                );
+                if (!res) return null;
+                return {
+                    overallStats: res.overallStats ?? null,
+                    individualStats: res.individualStats ?? []
+                };
+            })
         ]);
 
     return {
@@ -46,16 +68,8 @@ export const buildWellnessSummary = async (
         today: {
             date: range.endDateString,
             hrv: todayHrv?.hrvSummary ?? null,
-            hrvReadingCount: todayHrv?.hrvReadings?.length ?? 0,
+            hrvReadingCount: todayHrv?.hrvReadingCount ?? 0,
             sleep: todaySleep
-                ? {
-                      dailySleepDTO: todaySleep.dailySleepDTO ?? null,
-                      avgOvernightHrv: todaySleep.avgOvernightHrv,
-                      hrvStatus: todaySleep.hrvStatus,
-                      bodyBatteryChange: todaySleep.bodyBatteryChange,
-                      restingHeartRate: todaySleep.restingHeartRate
-                  }
-                : null
         },
         recent: {
             hrv: recentHrv ?? [],
