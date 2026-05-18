@@ -25,7 +25,7 @@
 | `workout.ts`                  | 训练计划      | `getWorkouts`, `getWorkoutDetail`, `addWorkout`, `addRunningWorkout`, `deleteWorkout`, `scheduleWorkout`                                                                                                                              |
 | `course.ts`                   | 课程          | `getCourses`, `getCourse`, `downloadCourseFit`, `downloadCourseGpx`, `importCourse`, `confirmCourseImport`, `deleteCourse`, `createCourse`                                                                                            |
 | `misc.ts`                     | 其他          | `getCalendar`, `getGolfSummary`, `getGolfScorecard`, `consentGrant`, `get`/`post`/`put`                                                                                                                                               |
-| `coach.ts`                    | AI 教练聚合   | `getCurrentSportsAbility`, `getWellnessSummary`                                                                                                                                                                                       |
+| `coach.ts`                    | AI 教练聚合   | `getTrainingOverview`, `getWellnessOverview`, `getActivitiesSummary`, `getActivityDetailSummary`                                                                                                                                      |
 
 ### 修改的文件
 
@@ -50,10 +50,12 @@ GarminConnectBase
 
 ### 公共 API
 
-原模块化拆分阶段公共 API 完全不变。2026-05-18 新增 AI 教练聚合接口后，旧方法签名、返回值、参数仍保持兼容，同时新增以下两个面向 MCP/AI 分析场景的聚合方法：
+原模块化拆分阶段公共 API 完全不变。2026-05-18 新增 AI 教练聚合接口后，`Coach` 模块对外只保留以下面向 MCP/AI 分析场景的聚合方法：
 
--   `getCurrentSportsAbility(type, options)`：`type` 支持 `running`、`cycling`、`all`
--   `getWellnessSummary(options)`：返回当天恢复状态和最近一段时间的健康趋势
+-   `getTrainingOverview(options)`：返回 `training_overview_v1` 训练能力概览
+-   `getWellnessOverview(options)`：返回 `wellness_overview_v1` 恢复状态概览
+-   `getActivitiesSummary(options)`：返回 `activities_summary_v1` 精简活动列表
+-   `getActivityDetailSummary(options | activityId)`：返回 `activity_detail_v1` 精简单次活动详情
 
 ### 依赖关系
 
@@ -68,18 +70,31 @@ GarminConnectBase
 
 ### 涉及模块
 
-| 文件                                 | 变化                                                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `src/garmin/modules/coach.ts`        | 新增 AI 教练聚合模块，组合运动能力、训练概览和每日恢复数据                                 |
-| `src/garmin/types/coach.ts`          | 新增聚合接口入参、返回值类型，包含 `training_overview_v1` 和 `wellness_overview_v1` schema |
-| `src/garmin/modules/wellness/hrv.ts` | 新增 `getHRVDailySummary(startDate, endDate)`，并兼容 Garmin 返回对象或数组两种形态        |
-| `src/garmin/types/hrv.ts`            | 新增 `HRVDailySummaryResponse`                                                             |
-| `src/garmin/GarminConnect.ts`        | 将 `Coach` 模块接入 mixin 链                                                               |
-| `test/ai-coach-summary.js`           | 新增 live 验证脚本，覆盖 `running`、`cycling`、`all` 和 wellness 聚合结构                  |
-| `test/training-overview.js`          | 新增 live 验证脚本，覆盖 `training_overview_v1` 精简结构                                   |
-| `test/wellness-overview.js`          | 新增 live 验证脚本，覆盖 `wellness_overview_v1` 精简结构和缺数据标记                       |
+| 文件                                           | 变化                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/garmin/modules/coach.ts`                  | 新增 AI 教练聚合模块，组合运动能力、训练概览、每日恢复数据和活动精简数据                               |
+| `src/garmin/modules/coach/`                    | 拆分 AI 教练实现，主 `coach.ts` 只保留 mixin 包装和公开方法                                            |
+| `src/garmin/modules/coach/activity-summary.ts` | 新增活动列表和单次活动详情的 AI 精简结构生成逻辑，输出 `activities_summary_v1` 与 `activity_detail_v1` |
+| `src/garmin/types/coach.ts`                    | 新增聚合接口入参、返回值类型，包含 AI Coach 四个稳定 schema                                            |
+| `src/garmin/modules/wellness/hrv.ts`           | 新增 `getHRVDailySummary(startDate, endDate)`，并兼容 Garmin 返回对象或数组两种形态                    |
+| `src/garmin/types/hrv.ts`                      | 新增 `HRVDailySummaryResponse`                                                                         |
+| `src/garmin/GarminConnect.ts`                  | 将 `Coach` 模块接入 mixin 链                                                                           |
+| `test/coach-public-api.js`                     | 新增公开 API 验证脚本，确保只暴露 AI Coach 当前稳定聚合接口                                            |
+| `test/ai-training-overview.js`                 | live 验证脚本，覆盖 `training_overview_v1` 精简结构                                                    |
+| `test/ai-wellness-overview.js`                 | live 验证脚本，覆盖 `wellness_overview_v1` 精简结构和缺数据标记                                        |
+| `test/ai-activities-summary.js`                | live 验证脚本，覆盖 `activities_summary_v1` 精简活动列表                                               |
+| `test/ai-activity-detail-summary.js`           | live 验证脚本，覆盖 `activity_detail_v1` 精简单次活动详情                                              |
 
 ### 结构/接口变化
+
+### MCP / AI Coach 调用分层
+
+四个聚合接口按上下文粒度分层使用：
+
+-   `activities_summary_v1`：保留最近训练发生了什么，低 token、高覆盖，适合作为默认近期训练上下文
+-   `activity_detail_v1`：只在需要分析单次训练时加载，保留更细的训练影响、强度、跑姿、stamina、主观反馈和传感器指标
+-   `training_overview_v1`：提供长期能力和负荷背景，用于判断训练水平、运动专项能力、负荷结构和 90 天趋势
+-   `wellness_overview_v1`：提供恢复状态，用于判断当天训练建议的强度上限和风险提示
 
 #### `getTrainingOverview(options)`
 
@@ -104,23 +119,9 @@ GarminConnectBase
 -   请求前先执行 `client.checkTokenVaild()`，随后并行请求各来源
 -   Garmin 原始统计会做单位压缩，例如距离转 km、时长转小时、体重克转 kg、爬升转 m
 
-#### `getCurrentSportsAbility(type, options)`
-
-用于生成“用户当前综合运动能力”输入。`type` 可传：
-
--   `running`：返回用户基础体征、训练状态、跑步运动统计、比赛预测、乳酸阈值
--   `cycling`：返回用户基础体征、训练状态、骑行运动统计、FTP/功体比、骑行能力、功率曲线、骑行 VO2/MaxMet
--   `all`：同时返回 `running` 和 `cycling`
-
-默认行为：
-
--   运动统计默认取最近 365 天
--   趋势类数据默认取最近 90 天
--   每个原子接口失败时记录到 `sourceErrors`，不让单个非关键接口阻断整个聚合结果
-
 #### `getWellnessOverview(options)`
 
-用于生成 AI Coach 和 MCP 优先消费的精简恢复概览。该接口复用 `getWellnessSummary()` 的取数结果，再压缩为稳定 schema：
+用于生成 AI Coach 和 MCP 优先消费的精简恢复概览。该接口内部查询 HRV、睡眠、身体电量等来源，再压缩为稳定 schema：
 
 -   `schema: "wellness_overview_v1"`
 -   `snapshotDate` 和 `rangeDays`
@@ -138,23 +139,47 @@ GarminConnectBase
 -   不完整用户不会抛错，缺失项保留为 `null` 并在 `availability`/`source.unavailableMetrics` 中标记
 -   如只有身体电量而无 HRV/睡眠，接口仍返回完整结构，readiness confidence 会降为 `low`
 
-#### `getWellnessSummary(options)`
+#### `getActivitiesSummary(options)`
 
-用于生成“用户 Wellness 情况综合”输入。默认返回今天和最近 7 天：
+用于把 Garmin 活动列表压缩为 AI Coach 可直接消费的近期训练摘要。该接口会移除活动列表中的用户、隐私、地图、媒体、原始 split 大对象等字段，仅保留训练建议常用指标：
 
--   当天 HRV 摘要和 HRV 读数数量
--   当天睡眠摘要、睡眠 HRV、身体电量变化、静息心率
--   近期 HRV 摘要列表
--   近期身体电量高低值
--   近期睡眠整体统计和每日睡眠指标
+-   `schema: "activities_summary_v1"`
+-   `range`：请求上下文的开始、结束和天数
+-   `summary`：活动数量、按运动类型汇总的次数/距离/时长/爬升/负荷、总负荷、总时长、高强度/低强度/其他训练次数
+-   `activities`：每次活动的 id、日期时间、运动类型、名称、距离、时长、配速、心率、爬升、热量、训练效果、训练负荷、身体电量变化、跑姿、心率区间和 AI flags
+-   `aiHints`：例如近期节奏跑、低负荷有氧、可继续查询详情等提示
+
+默认行为：
+
+-   `rangeDays` 默认 7 天
+-   `start` 默认 0，`limit` 默认 20
+-   请求前先执行 `client.checkTokenVaild()`
+-   `activityType` 和 `subActivityType` 会透传给 Garmin 活动列表接口
+
+#### `getActivityDetailSummary(options | activityId)`
+
+用于把单次 Garmin 活动详情压缩为 AI Coach 深入分析结构。该接口会丢弃图表、轨迹、完整 split 明细、设备冗余元数据等大字段，仅保留：
+
+-   `schema: "activity_detail_v1"`
+-   活动 id、日期、运动类型、名称、地点
+-   `summary`：距离、时长、移动时长、配速、GAP、心率、热量、爬升/下降、均温
+-   `trainingImpact`：训练负荷、有氧/无氧训练效果、训练效果消息、身体电量变化、恢复心率
+-   `intensity`：心率区间、moderate/vigorous minutes
+-   `runForm`：步频、步幅、触地时间、左右平衡、垂直振幅、垂直比
+-   `stamina`、`subjective`、`sensors`、`splits` 和 `aiHints`
+
+默认行为：
+
+-   支持 `getActivityDetailSummary({ activityId })` 或直接传入 `activityId`
+-   请求前先执行 `client.checkTokenVaild()`
+-   用户缺少跑姿、stamina 或主观反馈时，对应字段返回 `null`，不抛错
 
 ### 迁移或后续注意事项
 
-1. MCP 服务应优先调用 `getTrainingOverview()` 和 `getWellnessOverview()`，避免直接消费多个 Garmin 原始大响应。
-2. `sourceErrors` 需要透传给 AI 分析层，便于判断某些建议是否缺少数据支撑。
-3. `getCurrentSportsAbility()` 仍保留较多原始来源细节，适合调试或检查源数据；生产 AI prompt 优先使用 `training_overview_v1`。
-4. `getTrainingOverview()` 不返回 recovery、recentActivities、subjectiveFeedback 的实际数据，只在 `dataCompleteness` 标记为 `false`，后续需要再接入独立来源。
-5. `.gitignore` 当前忽略整个 `test/` 目录，`test/ai-coach-summary.js`、`test/training-overview.js` 和 `test/wellness-overview.js` 是本地验证脚本；如需纳入版本管理，需要先调整忽略规则。
+1. MCP 服务应优先调用 AI Coach 聚合接口，避免直接消费多个 Garmin 原始大响应。
+2. `getCurrentSportsAbility()` 和 `getWellnessSummary()` 不再作为公开方法保留；如需调试源数据，应直接调用底层 Garmin 原子接口。
+3. `getTrainingOverview()` 不返回 recovery、recentActivities、subjectiveFeedback 的实际数据，只在 `dataCompleteness` 标记为 `false`，后续需要再接入独立来源。
+4. `.gitignore` 当前忽略整个 `test/` 目录，AI Coach 相关 `test/ai-*.js` 和 `test/coach-public-api.js` 是本地验证脚本；如需纳入版本管理，需要先调整忽略规则。
 
 ## 迁移/后续注意事项
 

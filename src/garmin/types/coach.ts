@@ -1,38 +1,9 @@
-import { ActivityStatsEntry } from './activity-stats';
-import { BodyBatteryDailyEntry } from './body-battery';
-import {
-    CyclingAbility,
-    MaxMetResponse,
-    PowerCurveResponse,
-    PowerToWeightEntry
-} from './cycling';
-import { HRVData, HRVDailySummary } from './hrv';
-import {
-    RacePredictionMonthlyReadable,
-    RunningLactateThreshold,
-    BiometricStatRangeEntry
-} from './race-prediction';
-import { SleepDailyStat, SleepDailySummary, SleepData } from './sleep';
-import {
-    TrainingLoadBalanceResponse,
-    TrainingStatusData
-} from './training-status';
-
-export type SportsAbilityType = 'running' | 'cycling' | 'all';
-
 export interface CoachDateRangeOptions {
     date?: Date | string;
     startDate?: Date | string;
     endDate?: Date | string;
     recentDays?: number;
 }
-
-export interface CurrentSportsAbilityOptions extends CoachDateRangeOptions {
-    activityStatsDays?: number;
-    trendDays?: number;
-}
-
-export interface WellnessSummaryOptions extends CoachDateRangeOptions {}
 
 export interface WellnessOverviewOptions extends CoachDateRangeOptions {
     rangeDays?: number;
@@ -43,97 +14,147 @@ export interface TrainingOverviewOptions extends CoachDateRangeOptions {
     trendDays?: number;
 }
 
-export interface CoachUserProfile {
-    age?: number;
-    birthDate?: string;
-    gender?: string;
-    height?: number;
-    weight?: number;
-    vo2Max?: number;
-    vo2MaxCycling?: number | null;
-    lactateThresholdHeartRate?: number;
-    activityClass?: number;
-    functionalThresholdPower?: number | null;
+export interface ActivitiesSummaryOptions extends CoachDateRangeOptions {
+    rangeDays?: number;
+    start?: number;
+    limit?: number;
+    activityType?: string;
+    subActivityType?: string;
 }
 
-export interface CoachTrainingStatus {
-    current: TrainingStatusData | null;
-    loadBalance:
-        | TrainingLoadBalanceResponse['metricsTrainingLoadBalanceDTOMap'][string]
-        | null;
-    weekly: TrainingStatusData[];
-}
-
-export interface CoachActivityStats {
-    range: {
-        startDate: string;
-        endDate: string;
-    };
-    recent: ActivityStatsEntry[];
-    latest: ActivityStatsEntry | null;
-}
-
-export interface RunningAbilitySummary {
-    activityStats: CoachActivityStats;
-    racePredictions: RacePredictionMonthlyReadable[];
-    lactateThreshold: RunningLactateThreshold | null;
-}
-
-export interface CyclingAbilitySummary {
-    activityStats: CoachActivityStats;
-    latestPowerToWeight: PowerToWeightEntry[];
-    powerToWeightTrend: BiometricStatRangeEntry[];
-    cyclingAbility: CyclingAbility | null;
-    powerCurve: PowerCurveResponse | null;
-    maxMet: MaxMetResponse | null;
-}
-
-export interface CurrentSportsAbilitySummary {
-    type: SportsAbilityType;
-    generatedAt: string;
-    user: CoachUserProfile;
-    training: CoachTrainingStatus;
-    running?: RunningAbilitySummary;
-    cycling?: CyclingAbilitySummary;
-    sourceErrors: Record<string, string>;
-}
-
-export interface WellnessTodaySummary {
-    date: string;
-    hrv: HRVData['hrvSummary'] | null;
-    hrvReadingCount: number;
-    sleep:
-        | (Pick<
-              SleepData,
-              | 'avgOvernightHrv'
-              | 'hrvStatus'
-              | 'bodyBatteryChange'
-              | 'restingHeartRate'
-          > & {
-              dailySleepDTO: SleepData['dailySleepDTO'] | null;
-          })
-        | null;
-}
-
-export interface WellnessSummary {
-    generatedAt: string;
-    range: {
-        startDate: string;
-        endDate: string;
-    };
-    today: WellnessTodaySummary;
-    recent: {
-        hrv: HRVDailySummary[];
-        bodyBattery: BodyBatteryDailyEntry[];
-        sleep: {
-            overall: SleepDailySummary['overallStats'] | null;
-            daily: SleepDailyStat[];
-        };
-    };
-    sourceErrors: Record<string, string>;
+export interface ActivityDetailSummaryOptions {
+    activityId: number;
 }
 
 export type WellnessMetricAvailability = 'available' | 'partial' | 'no_data';
+
+export interface CompactTrainingEffect {
+    aerobic: number | null;
+    anaerobic: number | null;
+    label: string;
+}
+
+export interface CompactActivity {
+    id: number;
+    date: string | null;
+    time: string | null;
+    sport: string | null;
+    name: string | null;
+    durationMin: number | null;
+    distanceKm: number | null;
+    movingMin?: number | null;
+    pace?: string | null;
+    gapPace?: string | null;
+    avgHr: number | null;
+    maxHr: number | null;
+    elevGainM?: number | null;
+    calories: number | null;
+    trainingEffect: CompactTrainingEffect;
+    load: number | null;
+    bodyBatteryDelta: number | null;
+    runForm?: {
+        cadence: number | null;
+        strideCm: number | null;
+        gctMs: number | null;
+        verticalOscCm: number | null;
+    };
+    hrZonesSec: number[];
+    flags: string[];
+}
+
+export interface ActivitiesSummary {
+    schema: 'activities_summary_v1';
+    range: {
+        start: string;
+        end: string;
+        days: number;
+    };
+    summary: {
+        activities: number;
+        sports: Record<
+            string,
+            {
+                count: number;
+                distanceKm?: number;
+                durationMin: number;
+                elevGainM?: number;
+                load: number;
+            }
+        >;
+        totalLoad: number;
+        totalDurationMin: number;
+        hardSessions: number;
+        easySessions: number;
+        otherSessions: number;
+    };
+    activities: CompactActivity[];
+    aiHints: string[];
+}
+
+export interface ActivityDetailSummary {
+    schema: 'activity_detail_v1';
+    id: number;
+    date: string | null;
+    sport: string | null;
+    name: string | null;
+    location: string | null;
+    summary: {
+        distanceKm: number | null;
+        durationMin: number | null;
+        movingMin: number | null;
+        pace: string | null;
+        gapPace: string | null;
+        avgHr: number | null;
+        maxHr: number | null;
+        calories: number | null;
+        elevGainM: number | null;
+        elevLossM: number | null;
+        avgTempC: number | null;
+    };
+    trainingImpact: {
+        label: string;
+        load: number | null;
+        aerobicTE: number | null;
+        anaerobicTE: number | null;
+        aerobicMessage: string | null;
+        anaerobicMessage: string | null;
+        bodyBatteryDelta: number | null;
+        recoveryHr: number | null;
+    };
+    intensity: {
+        hrZonesSec: number[];
+        moderateMin: number | null;
+        vigorousMin: number | null;
+    };
+    runForm: {
+        cadence: number | null;
+        maxCadence: number | null;
+        strideCm: number | null;
+        gctMs: number | null;
+        gctBalanceLeft: number | null;
+        verticalOscCm: number | null;
+        verticalRatio: number | null;
+    };
+    stamina: {
+        begin: number | null;
+        end: number | null;
+        minAvailable: number | null;
+    };
+    subjective: {
+        feel: number | null;
+        rpe: number | null;
+    };
+    sensors: {
+        heartRate: boolean;
+        runPower: boolean;
+        stryd: boolean;
+    };
+    splits: {
+        available: boolean;
+        summaryTypes: string[];
+    };
+    aiHints: string[];
+}
 
 export interface WellnessOverview {
     schema: 'wellness_overview_v1';
