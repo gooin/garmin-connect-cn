@@ -39,26 +39,36 @@ export interface CompactActivity {
     date: string | null;
     time: string | null;
     sport: string | null;
+    subSport: string | null;
     name: string | null;
-    durationMin: number | null;
-    distanceKm: number | null;
-    movingMin?: number | null;
-    pace?: string | null;
-    gapPace?: string | null;
-    avgHr: number | null;
-    maxHr: number | null;
-    elevGainM?: number | null;
-    calories: number | null;
-    trainingEffect: CompactTrainingEffect;
-    load: number | null;
-    bodyBatteryDelta: number | null;
-    runForm?: {
-        cadence: number | null;
-        strideCm: number | null;
-        gctMs: number | null;
-        verticalOscCm: number | null;
+    summary: {
+        distanceKm: number | null;
+        durationMin: number | null;
+        pace: string | null;
+        avgHr: number | null;
+        maxHr: number | null;
+        elevGainM: number | null;
     };
-    hrZonesSec: number[];
+    impact: {
+        label: string;
+        load: number | null;
+        aerobicTE: number | null;
+        anaerobicTE: number | null;
+        bodyBatteryDelta: number | null;
+    };
+    intensity: {
+        hrZonesSec: number[];
+    };
+    workout?: {
+        structured: boolean;
+        workoutId: number | null;
+        type: string | null;
+        /** 说明 segments 数组每个索引对应的字段名 */
+        segmentSchema: string[];
+        segments: Array<
+            [string, number, number | null, number | null, string | null]
+        >;
+    };
     flags: string[];
 }
 
@@ -95,13 +105,18 @@ export interface ActivityDetailSummary {
     schema: 'activity_detail_v1';
     id: number;
     date: string | null;
+    startTime: string | null;
     sport: string | null;
+    subSport: string | null;
     name: string | null;
     location: string | null;
+    isStructuredWorkout: boolean;
+    workoutId: number | null;
     summary: {
         distanceKm: number | null;
         durationMin: number | null;
         movingMin: number | null;
+        elapsedMin: number | null;
         pace: string | null;
         gapPace: string | null;
         avgHr: number | null;
@@ -122,11 +137,10 @@ export interface ActivityDetailSummary {
         recoveryHr: number | null;
     };
     intensity: {
-        hrZonesSec: number[];
         moderateMin: number | null;
         vigorousMin: number | null;
     };
-    runForm: {
+    runForm?: {
         cadence: number | null;
         maxCadence: number | null;
         strideCm: number | null;
@@ -135,24 +149,48 @@ export interface ActivityDetailSummary {
         verticalOscCm: number | null;
         verticalRatio: number | null;
     };
-    stamina: {
+    stamina?: {
         begin: number | null;
         end: number | null;
         minAvailable: number | null;
     };
-    subjective: {
+    subjective?: {
         feel: number | null;
         rpe: number | null;
+        complianceScore: number | null;
     };
-    sensors: {
+    sensors?: {
         heartRate: boolean;
         runPower: boolean;
         stryd: boolean;
     };
-    splits: {
+    workoutStructure?: {
         available: boolean;
-        summaryTypes: string[];
+        type: string | null;
+        /** 说明 segments 数组每个索引对应的字段名 */
+        segmentSchema: string[];
+        /** 按训练顺序展开的每个分段，将聚合数据平摊到每个子段 */
+        segments: Array<
+            [
+                string,
+                number,
+                number,
+                string,
+                number | null,
+                number | null,
+                number | null
+            ]
+        >;
     };
+    movementBreakdown?: Record<
+        string,
+        {
+            distanceKm: number | null;
+            durationMin?: number | null;
+            durationSec?: number | null;
+            avgHr: number | null;
+        }
+    >;
     aiHints: string[];
 }
 
