@@ -151,4 +151,24 @@ const WithCourse = applyCourseModule(WithWorkout);
 const WithMisc = applyMiscModule(WithCourse);
 const WithCoach = applyCoachModule(WithMisc);
 
-export default class GarminConnect extends WithCoach {}
+export interface GarminConnect
+    extends GarminConnectBase,
+        InstanceType<typeof WithUser>,
+        InstanceType<typeof WithSleep>,
+        InstanceType<typeof WithHRV>,
+        InstanceType<typeof WithWeight>,
+        InstanceType<typeof WithHydration>,
+        InstanceType<typeof WithBodyBattery>,
+        InstanceType<typeof WithHeartRate>,
+        InstanceType<typeof WithActivityBase>,
+        InstanceType<typeof WithRunning>,
+        InstanceType<typeof WithCycling>,
+        InstanceType<typeof WithTrainingStatus>,
+        InstanceType<typeof WithDevice>,
+        InstanceType<typeof WithWorkout>,
+        InstanceType<typeof WithCourse>,
+        InstanceType<typeof WithMisc>,
+        InstanceType<typeof WithCoach> {}
+
+export class GarminConnect extends WithCoach {}
+export default GarminConnect;
