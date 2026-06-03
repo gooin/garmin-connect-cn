@@ -58,7 +58,7 @@
         "@upstash/redis": "^1.35.6",
         "app-root-path": "^3.1.0",
         "axios": "^1.5.1",
-        "axios-cookiejar-support": "^6.0.4",
+        "axios-cookiejar-support": "^5.0.5",
         "crypto": "^1.0.1",
         "form-data": "^4.0.0",
         "ioredis": "^5.8.1",
