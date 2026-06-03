@@ -168,6 +168,14 @@ export class HttpClient {
             !originalRequest?._retry
         ) {
             if (!this.oauth2Token) {
+                if (
+                    originalRequest?.url?.includes('signin') ||
+                    originalRequest?.url?.includes('login')
+                ) {
+                    throw new Error(
+                        'No OAuth2 token available (登录失败，密码错误)'
+                    );
+                }
                 throw new Error('No OAuth2 token available');
             }
 
