@@ -15,7 +15,8 @@ import {
     IOauth1,
     IOauth1Consumer,
     IOauth1Token,
-    IOauth2Token
+    IOauth2Token,
+    IGarminTokens
 } from '../garmin/types';
 import crypto from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
@@ -67,6 +68,7 @@ export class HttpClient {
     oauth2Token: IOauth2Token | undefined;
     OAUTH_CONSUMER: IOauth1Consumer | undefined;
     mfaManager: MFAManager;
+    onTokenChange?: (tokens: IGarminTokens) => void;
 
     constructor(url: UrlClass, config: GCConfig) {
         const jar = new CookieJar();
@@ -813,6 +815,12 @@ export class HttpClient {
             }
         });
         this.oauth2Token = this.setOauth2TokenExpiresAt(response);
+        if (this.onTokenChange && this.oauth1Token && this.oauth2Token) {
+            this.onTokenChange({
+                oauth1: this.oauth1Token,
+                oauth2: this.oauth2Token
+            });
+        }
     }
 
     /**

@@ -54,6 +54,9 @@ class GarminConnectBase {
         this.listeners = {};
 
         this.client = new HttpClient(this.url, config);
+        this.client.onTokenChange = (tokens) => {
+            this.emitSessionChange(tokens);
+        };
     }
 
     async login(
@@ -125,6 +128,24 @@ class GarminConnectBase {
     loadToken(oauth1: IOauth1Token, oauth2: IOauth2Token): void {
         this.client.oauth1Token = oauth1;
         this.client.oauth2Token = oauth2;
+    }
+
+    onSessionChange(callback: (session: IGarminTokens) => void): void {
+        if (!this.listeners['sessionChange']) {
+            this.listeners['sessionChange'] = [];
+        }
+        this.listeners['sessionChange'].push(callback);
+    }
+
+    private emitSessionChange(tokens: IGarminTokens): void {
+        const callbacks = this.listeners['sessionChange'] || [];
+        for (const cb of callbacks) {
+            try {
+                cb(tokens);
+            } catch (err) {
+                console.error('sessionChange listener error:', err);
+            }
+        }
     }
 
     // 被多个模块依赖的基础方法，放在基类中
