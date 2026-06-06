@@ -12,11 +12,18 @@ export function applyDeviceModule(Base: ModuleConstructor) {
                     await this.client.get<PrimaryTrainingDeviceResponse>(
                         this.url.PRIMARY_TRAINING_DEVICE
                     );
-                const devices =
+                let devices =
                     response.PrimaryTrainingDevices?.deviceWeights ?? [];
-                const primaryWearableDevice = devices.find(
+                let primaryWearableDevice = devices.find(
                     (device) => device.primaryWearableDevice
                 );
+
+                if (!primaryWearableDevice) {
+                    devices = response.WearableDevices?.deviceWeights ?? [];
+                    primaryWearableDevice = devices.find(
+                        (device) => device.primaryWearableDevice
+                    );
+                }
 
                 if (
                     !primaryWearableDevice?.displayName ||
