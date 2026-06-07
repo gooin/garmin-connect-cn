@@ -11,7 +11,10 @@
         "build:watch-windows": "npm run build:windows -- --watch",
         "prettier:all": "prettier --write .",
         "pretty": "pretty-quick --staged",
-        "prepack": "npm run build:windows"
+        "prepack": "npm run build:windows",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:debug": "DEBUG=true vitest run"
     },
     "repository": {
         "type": "git",
