@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { GarminConnect } from '../../src/index';
+import { printResponse } from './log-helper';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -11,7 +12,7 @@ const username = process.env.TEST_GARMIN_USERNAME;
 const password = process.env.TEST_GARMIN_PASSWORD;
 const domain = process.env.TEST_GARMIN_DOMAIN || 'garmin.cn';
 
-describe('Course & Workout Integration Tests', () => {
+describe('Workout Integration Tests', () => {
     let client: GarminConnect;
 
     beforeAll(async () => {
@@ -25,33 +26,40 @@ describe('Course & Workout Integration Tests', () => {
         }
     });
 
-    it('courses - 应当能获取路书列表', async () => {
+    it('workouts - 获取课表列表与详情', async () => {
         if (!client) return;
-        const courses = await client.getCourses();
-        expect(courses).toBeDefined();
-        expect(Array.isArray(courses)).toBe(true);
-
-        // 如果用户有路书，尝试读取其中一个详情
-        if (courses.length > 0) {
-            const courseId = courses[0].courseId;
-            const courseDetail = await client.getCourse({ courseId });
-            expect(courseDetail).toBeDefined();
-            expect(courseDetail.courseId).toBe(courseId);
-        }
-    });
-
-    it('workouts - 应当能获取课表列表', async () => {
-        if (!client) return;
-        const workouts = await client.getWorkouts(0, 10);
+        const workouts = await client.getWorkouts(0, 5);
         expect(workouts).toBeDefined();
         expect(Array.isArray(workouts)).toBe(true);
 
-        // 如果用户有课表，尝试读取详情
+        printResponse('课表列表 (getWorkouts)', workouts, (data) => ({
+            count: data.length,
+            workouts: data.map((w: any) => ({
+                workoutId: w.workoutId,
+                workoutName: w.workoutName,
+                sportType: w.sportType?.sportTypeKey,
+                createdDate: w.createdDate
+            }))
+        }));
+
         if (workouts.length > 0) {
             const workoutId = workouts[0].workoutId!.toString();
             const detail = await client.getWorkoutDetail({ workoutId });
             expect(detail).toBeDefined();
             expect(detail.workoutId).toBeDefined();
+
+            printResponse(
+                '第一条课表详情 (getWorkoutDetail)',
+                detail,
+                (data) => ({
+                    workoutId: data.workoutId,
+                    workoutName: data.workoutName,
+                    sportType: data.sportType?.sportTypeKey,
+                    segmentsCount: data.workoutSegments?.length,
+                    firstSegmentStepsCount:
+                        data.workoutSegments?.[0]?.workoutSteps?.length
+                })
+            );
         }
     });
 });
