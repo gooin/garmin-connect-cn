@@ -12,9 +12,9 @@
         "prettier:all": "prettier --write .",
         "pretty": "pretty-quick --staged",
         "prepack": "npm run build:windows",
-        "test": "vitest run",
+        "test": "vitest run test/integration/auth.test.ts && vitest run --exclude test/integration/auth.test.ts",
         "test:watch": "vitest",
-        "test:debug": "DEBUG=true vitest run"
+        "test:debug": "DEBUG=true vitest run test/integration/auth.test.ts && DEBUG=true vitest run --exclude test/integration/auth.test.ts"
     },
     "repository": {
         "type": "git",
