@@ -68,12 +68,43 @@ export function applyActivityBaseModule(Base: ModuleConstructor) {
         async getActivities(
             start?: number,
             limit?: number,
-            activityType?: ActivityType,
-            subActivityType?: ActivitySubType
+            activityType?: ActivityType | string,
+            subActivityType?: ActivitySubType | string,
+            minDistance?: number,
+            maxDistance?: number,
+            excludeChildren?: boolean,
+            startDate?: string,
+            endDate?: string,
+            search?: string
         ): Promise<IActivity[]> {
-            return this.client.get<IActivity[]>(this.url.ACTIVITIES, {
-                params: { start, limit, activityType, subActivityType }
-            });
+            let activities = await this.client.get<IActivity[]>(
+                this.url.ACTIVITIES,
+                {
+                    params: {
+                        start,
+                        limit,
+                        activityType,
+                        subActivityType,
+                        minDistance,
+                        maxDistance,
+                        excludeChildren,
+                        startDate,
+                        endDate,
+                        search
+                    }
+                }
+            );
+            if (search) {
+                const lowerSearch = search.toLowerCase();
+                activities = activities.filter(
+                    (activity) =>
+                        activity.activityName &&
+                        activity.activityName
+                            .toLowerCase()
+                            .includes(lowerSearch)
+                );
+            }
+            return activities;
         }
 
         async getActivity(activity: {

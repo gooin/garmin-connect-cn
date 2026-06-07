@@ -77,8 +77,14 @@ export type CoachApi = {
     getActivities(
         start?: number,
         limit?: number,
-        activityType?: ActivityType,
-        subActivityType?: ActivitySubType
+        activityType?: ActivityType | string,
+        subActivityType?: ActivitySubType | string,
+        minDistance?: number,
+        maxDistance?: number,
+        excludeChildren?: boolean,
+        startDate?: string,
+        endDate?: string,
+        search?: string
     ): Promise<IActivity[]>;
     getActivity(activity: { activityId: number }): Promise<IActivity>;
     getCyclingAbility: () => Promise<CyclingAbility | null>;

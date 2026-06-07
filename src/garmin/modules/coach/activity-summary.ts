@@ -679,7 +679,13 @@ export const buildActivitiesSummary = async (
         options.start ?? 0,
         options.limit ?? 20,
         options.activityType as ActivityType | undefined,
-        options.subActivityType as ActivitySubType | undefined
+        options.subActivityType as ActivitySubType | undefined,
+        options.minDistance,
+        options.maxDistance,
+        options.excludeChildren,
+        options.startDate,
+        options.endDate,
+        options.search
     );
     const compactActivities = activities.map(compactActivity);
     const totalLoad =

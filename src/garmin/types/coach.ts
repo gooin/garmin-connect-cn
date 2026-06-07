@@ -19,6 +19,12 @@ export interface ActivitiesSummaryOptions {
     limit?: number;
     activityType?: string;
     subActivityType?: string;
+    minDistance?: number;
+    maxDistance?: number;
+    excludeChildren?: boolean;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
 }
 
 export interface ActivityDetailSummaryOptions {
