@@ -31,3 +31,5 @@ test/*
 .agent
 APIs
 .env.test
+test_results.log
+*.log
