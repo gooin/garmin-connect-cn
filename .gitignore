@@ -25,7 +25,12 @@ dist
 garmin.config.json
 
 # tests
-test
+test/tokens/
+test/course-downloads/
+test/course-transfer-fit/
+test/weight-transfer/
+test/wellness/
 .vscode
 .agent
 APIs
+.env.test
