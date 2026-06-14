@@ -191,7 +191,8 @@ export const buildWellnessOverview = async (
                 maxLastNight: maximum(
                     recentHrv.map((entry) => entry.lastNightAvg)
                 ),
-                trend: hrvTrend(recentHrv)
+                trend: hrvTrend(recentHrv),
+                daily: recentHrv
             },
             sleep: {
                 avgScore: avgSleepScore,

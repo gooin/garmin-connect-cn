@@ -22,7 +22,7 @@
 **输出 (TrainingOverview)**:
 
 -   `athlete`: 用户的生理与画像信息（年龄、性别、身高体重、参与的运动项目）。
--   `state`: 当前训练状态（Training Status）、趋势、短期/长期负荷（Acute/Chronic Load）与急回旋比（ACWR）。
+-   `state`: 当前训练状态（Training Status）、中文状态、Garmin 原始反馈编码、趋势、短期/长期负荷（Acute/Chronic Load）与急慢性负荷比（ACWR）。
 -   `loadBalance`: 有氧低强度、有氧高强度、无氧的负荷分布。
 -   `sports`: 跑步和骑行的专属指标（包含 VO2Max、阈值配速/心率、FTP、年累计跑量/骑量、成绩预测、跑步动态数据）。
 -   `personalRecords`: 个人最佳成绩记录（如 5k、10k、最远距离等）。
@@ -130,3 +130,234 @@
 -   `movementBreakdown`: 按状态拆分走、跑、停站的具体时长及对应心率表现。
 -   `weather`: 运动时的环境与天气数据。
 -   `aiHints`: 针对单次运动的深度复盘提示（如：刺激强度足够、休息心率偏高、步频优秀等）。
+
+---
+
+## 6. 单日睡眠分析 (Sleep Analysis)
+
+**接口**: `getSleepAnalysis(date?)`
+**描述**: 返回单晚睡眠摘要和按时间排列的完整睡眠阶段时间线，适合睡眠卡片和恢复分析。
+**使用场景**:
+
+-   分析昨晚深睡、浅睡、REM 和清醒阶段分布。
+-   结合 HRV、身体电量和静息心率判断恢复情况。
+-   为当天课表强度调整提供恢复依据。
+
+**输入**:
+
+-   `date` (Date, 选填): 睡眠归属日期，默认当天。
+
+**输出 (`SleepAnalysisSummary`)**:
+
+-   `sleepDate`, `startAt`, `endAt`, `durationMin`, `score`, `quality`。
+-   `stageSummary`: 各睡眠阶段分钟数。
+-   `timeline`: 整晚按时间排序的阶段列表，最多 200 段。
+-   `metrics`: 睡眠心率、HRV、静息心率、呼吸和身体电量变化。
+
+---
+
+## 7. 训练准备与跑步能力输入
+
+这些接口用于生成训练建议或课表前的确定性数据准备，不会修改 Garmin。
+
+### 7.1 训练准备度
+
+**接口**:
+
+-   `getTrainingReadiness(date?)`
+-   `getMorningTrainingReadiness(date?)`
+
+**用途**:
+
+-   读取 Garmin 训练准备度、恢复时间、睡眠、HRV、压力历史和 ACWR 因子。
+-   `getMorningTrainingReadiness` 优先选择 `inputContext=AFTER_WAKEUP_RESET` 的晨间结果。
+
+**注意**: `recoveryTime` 单位为分钟。准备度是课表调整信号，不应单独决定高强度训练。
+
+### 7.2 耐力评分
+
+**接口**: `getEnduranceScore(startDate, endDate?)`
+
+-   只传 `startDate` 时读取单日精确值。
+-   同时传入起止日期时返回周聚合趋势。
+
+### 7.3 跑步耐受
+
+**接口**: `getRunningTolerance(startDate, endDate, aggregation?)`
+
+-   `aggregation`: `daily` 或 `weekly`，默认 `weekly`。
+-   用于评估用户近期可承受跑量，避免课表增量明显超过历史能力。
+
+---
+
+## 8. 课表与训练计划读取
+
+### 8.1 Workout 模板库
+
+**接口**:
+
+-   `getWorkouts(start?, limit?)`
+-   `getWorkoutDetail({ workoutId })`
+
+**用途**:
+
+-   读取用户已有的单次训练模板。
+-   分析用户常用的热身、主训练、恢复、冷身、目标配速或功率结构。
+
+### 8.2 已排期课表
+
+**接口**:
+
+-   `getScheduledWorkouts(year?, month?)`
+-   `getScheduledWorkoutById(scheduledWorkoutId)`
+
+**用途**:
+
+-   生成新计划前检查日期冲突和已有训练。
+-   回答“我本周安排了什么训练”等问题。
+
+**月份约定**: 对调用方使用自然月份 `1-12`；库内部转换为 Garmin 的 `0-11`。
+
+### 8.3 Garmin 官方训练计划
+
+**接口**:
+
+-   `getTrainingPlans()`
+-   `getTrainingPlanById(planId)`
+-   `getAdaptiveTrainingPlanById(planId)`
+
+**用途**:
+
+-   读取 Garmin 已订阅或可见的阶段训练计划。
+-   区分 Garmin 官方计划与 DailySync AI 生成的 `training_plan_draft_v1`。
+
+---
+
+## 9. AI 单次课表草案 (Workout Draft)
+
+**类型**: `WorkoutDraft`
+**Schema**: `workout_draft_v1`
+**接口**:
+
+-   `validateWorkoutDraft(draft)`
+-   `compileWorkoutDraft(draft)`
+
+**设计原则**:
+
+-   AI 只生成公制、用户可读的草案。
+-   当前只支持 `running`。
+-   距离单位为米，时长单位为秒，配速单位为秒/公里。
+-   步频使用完整步频 `spm`，功率使用瓦特。
+-   AI 不生成 Garmin ID、`stepOrder`、`childStepId`、`targetValueOne` 或 `targetValueTwo`。
+
+**支持的步骤**:
+
+-   `warmup`, `interval`, `recovery`, `rest`, `cooldown`, `other`
+-   `repeat` 重复组
+
+**支持的结束条件**:
+
+-   `time`
+-   `distance`
+-   `lap_button`
+
+**支持的目标**:
+
+-   `none`
+-   `pace`
+-   `heart_rate_zone`
+-   `power`
+-   `cadence`
+
+`compileWorkoutDraft` 只编译并返回 `GarminWorkoutUploadPayload`，不会调用 Garmin 写接口。
+
+---
+
+## 10. 课表写入与安全边界
+
+**写接口**:
+
+-   `addWorkout(payload)`: 创建 Workout 模板。
+-   `scheduleWorkout({ workoutId }, date)`: 把模板排入日历。
+-   `unscheduleWorkout(scheduledWorkoutId)`: 仅移除日历排期。
+-   `deleteWorkout({ workoutId })`: 删除 Workout 模板。
+
+**AI 使用约束**:
+
+-   分析和草案生成阶段不得调用写接口。
+-   写入前必须向用户展示确切日期、课表结构和目标 Garmin 账号。
+-   用户明确确认后，按 `addWorkout -> scheduleWorkout` 顺序执行。
+-   发布和删除必须由后端 Pending Coach Action 提供参数哈希、过期和幂等保护。
+-   不要递归删除 Garmin payload 中的 `null`；部分 `null` 是明确协议值。
+
+---
+
+## 11. 训练状态中文映射
+
+`TrainingOverview.state` 同时保留机器字段和中文字段：
+
+-   `status`: 稳定英文机器值，例如 `productive`。
+-   `statusZh`: 面向中国大陆用户的中文状态。
+-   `feedbackPhrase`: Garmin 原始编码，例如 `PRODUCTIVE_3`。
+-   `feedbackZh`: 根据稳定前缀得到的中文反馈。
+
+Garmin 同一状态可能有多个后缀变体。映射时只使用第一个下划线前的稳定前缀，例如 `PRODUCTIVE_3`、`PRODUCTIVE_6` 都映射为“高效训练”。
+
+| Garmin 前缀    | `status`       | 中文     |
+| -------------- | -------------- | -------- |
+| `PRODUCTIVE`   | `productive`   | 高效训练 |
+| `PEAKING`      | `peaking`      | 巅峰状态 |
+| `MAINTAINING`  | `maintaining`  | 维持效果 |
+| `RECOVERY`     | `recovery`     | 恢复     |
+| `STRAINED`     | `strained`     | 紧绷     |
+| `UNPRODUCTIVE` | `unproductive` | 效率不佳 |
+| `OVERREACHING` | `overreaching` | 过度训练 |
+| `DETRAINING`   | `detraining`   | 训练不足 |
+
+未知状态不得由 AI 自行猜测中文含义；中文字段为 `null` 时保留原始编码并说明暂未识别。
+
+---
+
+## 12. 建议的 MCP 能力拆分
+
+```text
+training_overview.read
+  getTrainingOverview
+
+wellness.read
+  getWellnessOverview
+  getSleepAnalysis
+
+activity.search
+  getActivitiesSummary
+
+activity.read
+  getActivityDetailSummary
+
+training_plan.read
+  getWorkouts
+  getWorkoutDetail
+  getScheduledWorkouts
+  getScheduledWorkoutById
+  getTrainingPlans
+  getTrainingPlanById
+  getAdaptiveTrainingPlanById
+
+training_plan.draft
+  getTrainingReadiness
+  getMorningTrainingReadiness
+  getEnduranceScore
+  getRunningTolerance
+  validateWorkoutDraft
+  compileWorkoutDraft
+
+training_plan.publish
+  addWorkout
+  scheduleWorkout
+
+training_plan.delete
+  unscheduleWorkout
+  deleteWorkout
+```
+
+`training_plan.publish` 和 `training_plan.delete` 必须标记为需要用户确认的写能力。读取和草案能力不得间接触发写操作。

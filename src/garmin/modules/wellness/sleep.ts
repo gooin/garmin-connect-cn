@@ -10,7 +10,12 @@ export function applySleepModule(Base: ModuleConstructor) {
 
                 const sleepData = await this.client.get<SleepData>(
                     `${this.url.DAILY_SLEEP}`,
-                    { params: { date: dateString } }
+                    {
+                        params: {
+                            date: dateString,
+                            nonSleepBufferMinutes: 60
+                        }
+                    }
                 );
 
                 if (!sleepData) {

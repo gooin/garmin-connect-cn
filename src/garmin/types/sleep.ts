@@ -95,6 +95,40 @@ export interface SleepLevels {
     activityLevel: number;
 }
 
+export type SleepStage = 'awake' | 'light' | 'deep' | 'rem';
+
+export interface SleepStageTimelineEntry {
+    startAt: string;
+    endAt: string;
+    stage: SleepStage;
+}
+
+export interface SleepAnalysisSummary {
+    schema: 'sleep_analysis_v1';
+    sleepDate: string;
+    sleepStartAt: string;
+    sleepEndAt: string;
+    timeline: SleepStageTimelineEntry[];
+    timelineSimplified: boolean;
+    stageSummary: {
+        awakeMin: number | null;
+        lightMin: number | null;
+        deepMin: number | null;
+        remMin: number | null;
+    };
+    metrics: {
+        totalSleepMin: number | null;
+        sleepScore: number | null;
+        quality: string | null;
+        nightlyHrvMs: number | null;
+        hrvStatus: string | null;
+        restingHeartRateBpm: number | null;
+        averageHeartRateBpm: number | null;
+        averageRespiration: number | null;
+        bodyBatteryChange: number | null;
+    };
+}
+
 export interface WellnessEpochRespirationDataDTO {
     startTimeGMT: number;
     respirationValue: number;

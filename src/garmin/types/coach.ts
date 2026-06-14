@@ -1,3 +1,6 @@
+import { HRVDailySummary } from './hrv';
+import { TrainingStatusData } from './training-status';
+
 export interface CoachDateRangeOptions {
     date?: Date | string;
     startDate?: Date | string;
@@ -223,6 +226,10 @@ export interface ActivityDetailSummary {
         condition: string | null;
     };
     aiHints: string[];
+    routePreview?: {
+        points: Array<[number, number]>;
+        simplified: true;
+    };
 }
 
 /** 活动 lap 原始数据 */
@@ -356,6 +363,7 @@ export interface WellnessOverview {
             minLastNight: number | null;
             maxLastNight: number | null;
             trend: string | null;
+            daily?: HRVDailySummary[];
         };
         sleep: {
             avgScore: number | null;
@@ -417,7 +425,14 @@ export interface TrainingOverview {
         observedSports: string[];
     };
     state: {
+        /** 稳定机器值，如 productive、maintaining */
         status: string | null;
+        /** 面向中国大陆用户的状态名称，如“高效训练” */
+        statusZh: string | null;
+        /** Garmin 原始反馈编码，如 PRODUCTIVE_3 */
+        feedbackPhrase: string | null;
+        /** 按稳定前缀映射的中文反馈 */
+        feedbackZh: string | null;
         trend: string | null;
         statusSport: string | null;
         fitnessTrendSport: string | null;
@@ -526,6 +541,7 @@ export interface TrainingOverview {
     /** 个人记录，只包含已达成(maxValue>0)的项目 */
     personalRecords?: PersonalRecordSummary[];
     aiHints: string[];
+    loadHistory?: TrainingStatusData[];
 }
 
 /** Garmin PR 类型定义 API 原始响应项 */

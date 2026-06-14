@@ -27,6 +27,8 @@ garmin.config.json
 # tests
 test/*
 !test/integration/
+!test/unit/
+!test/unit/**/*.ts
 .vscode
 .agent
 APIs

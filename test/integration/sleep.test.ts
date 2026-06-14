@@ -30,10 +30,78 @@ describe('Sleep Integration Tests', () => {
         if (!client) return;
 
         // 1. 获取特定日期睡眠
-        const sleepData = await client.getSleepData(new Date());
+        const sleepData = await client.getSleepData(
+            new Date('2026-06-13T12:00:00+08:00')
+        );
         expect(sleepData).toBeDefined();
+        const stageMinutes = sleepData.sleepLevels.reduce(
+            (totals: Record<number, number>, entry) => {
+                totals[entry.activityLevel] =
+                    (totals[entry.activityLevel] ?? 0) +
+                    (new Date(entry.endGMT).getTime() -
+                        new Date(entry.startGMT).getTime()) /
+                        60000;
+                return totals;
+            },
+            {}
+        );
+        expect(stageMinutes[0]).toBe(
+            sleepData.dailySleepDTO.deepSleepSeconds / 60
+        );
+        expect(stageMinutes[1]).toBe(
+            sleepData.dailySleepDTO.lightSleepSeconds / 60
+        );
+        expect(stageMinutes[2]).toBe(
+            sleepData.dailySleepDTO.remSleepSeconds / 60
+        );
+        const normalized = await client.getSleepAnalysis(
+            new Date('2026-06-13T12:00:00+08:00')
+        );
+        expect(normalized.timeline.map((entry) => entry.stage)).toContain(
+            'deep'
+        );
+        expect(normalized.timeline.map((entry) => entry.stage)).toContain(
+            'light'
+        );
+        expect(normalized.timeline.map((entry) => entry.stage)).toContain(
+            'rem'
+        );
         printResponse('睡眠原始数据 (getSleepData)', sleepData, (data) => ({
             calendarDate: data.dailySleepDTO?.calendarDate,
+            sleepLevelCount: data.sleepLevels?.length ?? 0,
+            sleepActivityLevels: Array.from(
+                new Set(
+                    (data.sleepLevels ?? []).map(
+                        (entry: { activityLevel: number }) =>
+                            entry.activityLevel
+                    )
+                )
+            ).sort(),
+            sleepActivityLevelMinutes: (data.sleepLevels ?? []).reduce(
+                (
+                    totals: Record<string, number>,
+                    entry: {
+                        startGMT: string;
+                        endGMT: string;
+                        activityLevel: number;
+                    }
+                ) => {
+                    const minutes =
+                        (new Date(entry.endGMT).getTime() -
+                            new Date(entry.startGMT).getTime()) /
+                        60000;
+                    totals[entry.activityLevel] =
+                        (totals[entry.activityLevel] ?? 0) + minutes;
+                    return totals;
+                },
+                {}
+            ),
+            dtoStageMinutes: {
+                awake: data.dailySleepDTO?.awakeSleepSeconds / 60,
+                light: data.dailySleepDTO?.lightSleepSeconds / 60,
+                deep: data.dailySleepDTO?.deepSleepSeconds / 60,
+                rem: data.dailySleepDTO?.remSleepSeconds / 60
+            },
             sleepScore:
                 data.dailySleepDTO?.sleepTimeSeconds != null
                     ? data.dailySleepDTO?.score

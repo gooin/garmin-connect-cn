@@ -62,4 +62,24 @@ describe('Workout Integration Tests', () => {
             );
         }
     });
+
+    it('workouts - 获取已排期课表与训练计划', async () => {
+        if (!client) return;
+        const now = new Date();
+        const scheduled = await client.getScheduledWorkouts(
+            now.getFullYear(),
+            now.getMonth() + 1
+        );
+        expect(Array.isArray(scheduled.calendarItems)).toBe(true);
+
+        const plans = await client.getTrainingPlans();
+        expect(plans).toBeDefined();
+
+        printResponse('已排期课表与训练计划', { scheduled, plans }, (data) => ({
+            scheduledCount: data.scheduled.calendarItems.filter(
+                (item: any) => item.itemType === 'workout'
+            ).length,
+            planCount: data.plans.trainingPlanList?.length ?? 0
+        }));
+    });
 });

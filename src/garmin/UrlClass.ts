@@ -98,6 +98,15 @@ export class UrlClass {
     get TRAINING_LOAD_BALANCE() {
         return `${this.GC_API}/metrics-service/metrics/trainingloadbalance/latest`;
     }
+    get TRAINING_READINESS() {
+        return `${this.GC_API}/metrics-service/metrics/trainingreadiness`;
+    }
+    get ENDURANCE_SCORE() {
+        return `${this.GC_API}/metrics-service/metrics/endurancescore`;
+    }
+    get RUNNING_TOLERANCE() {
+        return `${this.GC_API}/metrics-service/metrics/runningtolerance/stats`;
+    }
     RACE_PREDICTIONS_MONTHLY(displayName: string) {
         return `${this.GC_API}/metrics-service/metrics/racepredictions/monthly/${displayName}`;
     }
@@ -154,6 +163,15 @@ export class UrlClass {
     }
     get SCHEDULE_WORKOUTS() {
         return `${this.GC_API}/workout-service/schedule/`;
+    }
+    get TRAINING_PLANS() {
+        return `${this.GC_API}/trainingplan-service/trainingplan/plans`;
+    }
+    TRAINING_PLAN(id: number | string) {
+        return `${this.GC_API}/trainingplan-service/trainingplan/phased/${id}`;
+    }
+    ADAPTIVE_TRAINING_PLAN(id: number | string) {
+        return `${this.GC_API}/trainingplan-service/trainingplan/fbt-adaptive/${id}`;
     }
 
     // Garmin use month 0-11, not real month.

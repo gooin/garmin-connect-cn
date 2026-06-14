@@ -18,6 +18,7 @@ import {
     extractLoadBalance,
     extractUser,
     findPowerToWeight,
+    fullRunningCadence,
     getRange,
     hasSportStats,
     latestActivityStats,
@@ -27,6 +28,7 @@ import {
     normalizeGender,
     normalizeSport,
     normalizeStatus,
+    normalizeStatusZh,
     normalizeTrend,
     round,
     SourceErrors,
@@ -365,6 +367,15 @@ export const buildTrainingOverview = async (
                 current?.trainingStatus,
                 current?.trainingStatusFeedbackPhrase
             ),
+            statusZh: normalizeStatusZh(
+                current?.trainingStatus,
+                current?.trainingStatusFeedbackPhrase
+            ),
+            feedbackPhrase: current?.trainingStatusFeedbackPhrase ?? null,
+            feedbackZh: normalizeStatusZh(
+                current?.trainingStatus,
+                current?.trainingStatusFeedbackPhrase
+            ),
             trend: normalizeTrend(current?.fitnessTrend),
             statusSport: normalizeSport(current?.sport),
             fitnessTrendSport: normalizeSport(current?.fitnessTrendSport),
@@ -413,7 +424,7 @@ export const buildTrainingOverview = async (
                 },
                 year: runningYear,
                 form: {
-                    cadence: round(
+                    cadence: fullRunningCadence(
                         metricValue(runningStats, 'avgRunCadence', 'avg')
                     ),
                     strideCm: round(
@@ -509,5 +520,6 @@ export const buildTrainingOverview = async (
     }
 
     overview.aiHints = buildAiHints(overview);
+    overview.loadHistory = weeklyStatus;
     return overview;
 };

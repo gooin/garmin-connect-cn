@@ -409,3 +409,34 @@ export interface IActivityDetails {
           }[]
         | null;
 }
+
+export interface IActivityChartDetails {
+    activityId: number;
+    measurementCount: number;
+    metricsCount: number;
+    totalMetricsCount: number;
+    metricDescriptors: unknown[];
+    activityDetailMetrics: unknown[];
+    geoPolylineDTO?: {
+        startPoint?: {
+            lat: number;
+            lon: number;
+        };
+        endPoint?: {
+            lat: number;
+            lon: number;
+        };
+        minLat?: number;
+        maxLat?: number;
+        minLon?: number;
+        maxLon?: number;
+        polyline?: Array<{
+            lat: number;
+            lon: number;
+            valid?: boolean;
+        }>;
+    } | null;
+    heartRateDTOs: unknown[];
+    pendingData: boolean;
+    detailsAvailable: boolean;
+}

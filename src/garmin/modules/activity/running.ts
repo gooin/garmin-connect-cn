@@ -7,6 +7,10 @@ import {
     RunningLactateThreshold,
     RunningLactateThresholdEntry
 } from '../../types/race-prediction';
+import {
+    EnduranceScoreResponse,
+    RunningToleranceEntry
+} from '../../types/workout';
 import { ModuleConstructor } from '../types';
 
 const lactateThresholdSpeedToPace = (speed: number) => {
@@ -47,6 +51,49 @@ const formatRacePrediction = (
 
 export function applyRunningModule(Base: ModuleConstructor) {
     return class RunningModule extends Base {
+        async getEnduranceScore(
+            startDate: Date | string,
+            endDate?: Date | string
+        ): Promise<EnduranceScoreResponse> {
+            if (endDate === undefined) {
+                return this.client.get<EnduranceScoreResponse>(
+                    this.url.ENDURANCE_SCORE,
+                    {
+                        params: {
+                            calendarDate: toGarminDateString(startDate)
+                        }
+                    }
+                );
+            }
+            return this.client.get<EnduranceScoreResponse>(
+                `${this.url.ENDURANCE_SCORE}/stats`,
+                {
+                    params: {
+                        startDate: toGarminDateString(startDate),
+                        endDate: toGarminDateString(endDate),
+                        aggregation: 'weekly'
+                    }
+                }
+            );
+        }
+
+        async getRunningTolerance(
+            startDate: Date | string,
+            endDate: Date | string,
+            aggregation: 'daily' | 'weekly' = 'weekly'
+        ): Promise<RunningToleranceEntry[]> {
+            return this.client.get<RunningToleranceEntry[]>(
+                this.url.RUNNING_TOLERANCE,
+                {
+                    params: {
+                        startDate: toGarminDateString(startDate),
+                        endDate: toGarminDateString(endDate),
+                        aggregation
+                    }
+                }
+            );
+        }
+
         async getRacePredictionsMonthly(
             fromCalendarDate: Date | string,
             toCalendarDate: Date | string

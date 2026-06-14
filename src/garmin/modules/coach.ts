@@ -3,6 +3,7 @@ import {
     ActivitiesSummaryOptions,
     ActivityDetailSummary,
     ActivityDetailSummaryOptions,
+    SleepAnalysisSummary,
     TrainingOverview,
     TrainingOverviewOptions,
     WellnessOverview,
@@ -13,6 +14,7 @@ import {
     buildActivityDetailSummary
 } from './coach/activity-summary';
 import { buildTrainingOverview } from './coach/training-overview';
+import { buildSleepAnalysisSummary } from './coach/sleep-analysis';
 import { buildWellnessOverview } from './coach/wellness-overview';
 import { CoachApi } from './coach/helpers';
 import { ModuleConstructor } from './types';
@@ -61,6 +63,16 @@ export function applyCoachModule(Base: ModuleConstructor) {
                 this as unknown as CoachApi,
                 this.client,
                 options
+            );
+        }
+
+        async getSleepAnalysis(
+            date = new Date()
+        ): Promise<SleepAnalysisSummary> {
+            return buildSleepAnalysisSummary(
+                this as unknown as CoachApi,
+                this.client,
+                date
             );
         }
 

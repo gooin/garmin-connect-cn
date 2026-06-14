@@ -36,6 +36,15 @@ describe('Coach Integration Tests', () => {
         expect(overview.athlete).toBeDefined();
         expect(overview.state).toBeDefined();
         expect(overview.sports).toBeDefined();
+        if (overview.state.status) {
+            expect(overview.state.statusZh).toBeTruthy();
+        }
+        if (overview.state.feedbackPhrase) {
+            expect(overview.state.feedbackZh).toBeTruthy();
+        }
+        if (overview.sports.running.form.cadence !== null) {
+            expect(overview.sports.running.form.cadence).toBeLessThan(250);
+        }
 
         printResponse(
             '训练大盘总览 (getTrainingOverview)',
@@ -49,6 +58,9 @@ describe('Coach Integration Tests', () => {
                 },
                 state: {
                     status: data.state?.status,
+                    statusZh: data.state?.statusZh,
+                    feedbackPhrase: data.state?.feedbackPhrase,
+                    feedbackZh: data.state?.feedbackZh,
                     acuteLoad: data.state?.acuteLoad,
                     chronicLoad: data.state?.chronicLoad,
                     acwr: data.state?.acwr
@@ -56,7 +68,8 @@ describe('Coach Integration Tests', () => {
                 sportsRunning: data.sports?.running
                     ? {
                           vo2Max: data.sports.running.vo2Max,
-                          threshold: data.sports.running.threshold
+                          threshold: data.sports.running.threshold,
+                          cadence: data.sports.running.form?.cadence
                       }
                     : 'No running info',
                 aiHintsCount: data.aiHints?.length
@@ -123,8 +136,30 @@ describe('Coach Integration Tests', () => {
         );
 
         // 2. 获取第一个活动的单项深度详情精炼 (activity_detail_v1)
-        if (summary.activities.length > 0) {
-            const activityId = summary.activities[0].id;
+        const runningActivity = summary.activities.find(
+            (activity) =>
+                activity.sport === 'running' &&
+                (activity.summary.distanceKm ?? 0) >= 1
+        );
+        if (runningActivity) {
+            const activityId = runningActivity.id;
+            const rawActivity = await client.getActivity({ activityId });
+            const rawDetails = await client.getActivityDetails({ activityId });
+            const rawPolyline = (
+                rawDetails as unknown as {
+                    geoPolylineDTO?: Record<string, unknown> & {
+                        polyline?: Array<Record<string, unknown>>;
+                    };
+                }
+            ).geoPolylineDTO;
+            const rawSummary = (
+                rawActivity as unknown as {
+                    summaryDTO?: {
+                        averageRunCadence?: number;
+                        maxRunCadence?: number;
+                    };
+                }
+            ).summaryDTO;
             const detail = await client.getActivityDetailSummary(activityId);
             expect(detail).toBeDefined();
             expect(detail.schema).toBe('activity_detail_v1');
@@ -144,9 +179,32 @@ describe('Coach Integration Tests', () => {
                         load: data.trainingImpact?.load,
                         recoveryHr: data.trainingImpact?.recoveryHr
                     },
-                    runForm: data.runForm
+                    runForm: data.runForm,
+                    rawCadence: rawSummary?.averageRunCadence,
+                    routePreviewPoints: data.routePreview?.points?.length,
+                    detailKeys: Object.keys(rawDetails),
+                    geoPolylineKeys: rawPolyline
+                        ? Object.keys(rawPolyline)
+                        : [],
+                    polylineCount: rawPolyline?.polyline?.length,
+                    polylinePointKeys: rawPolyline?.polyline?.[0]
+                        ? Object.keys(rawPolyline.polyline[0])
+                        : []
                 })
             );
+            if (rawSummary?.averageRunCadence) {
+                expect(detail.runForm?.cadence).toBe(
+                    rawSummary.averageRunCadence < 120
+                        ? Math.round(rawSummary.averageRunCadence) * 2
+                        : Math.round(rawSummary.averageRunCadence)
+                );
+            }
+            if (rawPolyline?.polyline?.length) {
+                expect(detail.routePreview?.points.length).toBeGreaterThan(1);
+                expect(detail.routePreview?.points.length).toBeLessThanOrEqual(
+                    300
+                );
+            }
         }
     });
 });

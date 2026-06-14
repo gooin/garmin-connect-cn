@@ -627,3 +627,5 @@ export interface CompletionTarget {
     unit: string;
     unitType: string;
 }
+
+export * from './workout';

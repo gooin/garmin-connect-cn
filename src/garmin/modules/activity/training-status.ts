@@ -4,6 +4,7 @@ import {
     TrainingLoadBalanceResponse,
     WeeklyTrainingStatusResponse
 } from '../../types/training-status';
+import { TrainingReadinessEntry } from '../../types/workout';
 import { ModuleConstructor } from '../types';
 
 export function applyTrainingStatusModule(Base: ModuleConstructor) {
@@ -38,6 +39,33 @@ export function applyTrainingStatusModule(Base: ModuleConstructor) {
                     `Error in getTrainingLoadBalance: ${error.message}`
                 );
             }
+        }
+
+        async getTrainingReadiness(
+            date = new Date()
+        ): Promise<TrainingReadinessEntry[]> {
+            try {
+                const dateStr = toDateString(date);
+                return this.client.get<TrainingReadinessEntry[]>(
+                    `${this.url.TRAINING_READINESS}/${dateStr}`
+                );
+            } catch (error: any) {
+                throw new Error(
+                    `Error in getTrainingReadiness: ${error.message}`
+                );
+            }
+        }
+
+        async getMorningTrainingReadiness(
+            date = new Date()
+        ): Promise<TrainingReadinessEntry | null> {
+            const entries = await this.getTrainingReadiness(date);
+            if (!entries.length) return null;
+            return (
+                entries.find(
+                    (entry) => entry.inputContext === 'AFTER_WAKEUP_RESET'
+                ) ?? entries[0]
+            );
         }
 
         async getWeeklyTrainingStatus(

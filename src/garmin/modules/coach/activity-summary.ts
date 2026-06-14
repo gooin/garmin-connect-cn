@@ -15,6 +15,7 @@ import {
 import {
     CoachApi,
     compactLower,
+    fullRunningCadence,
     lowerSnake,
     round,
     toMinutes
@@ -236,7 +237,7 @@ const summarizeWorkoutSegment = (
               )
             : null,
         avgCadence: detailed
-            ? weightedAverage(entries, 'averageRunCadence')
+            ? fullRunningCadence(weightedAverage(entries, 'averageRunCadence'))
             : null
     };
 };
@@ -258,7 +259,8 @@ const fToC = (f: number): number => round(((f - 32) * 5) / 9, 1) ?? f;
 
 /** 将原始 lap 数据压缩为 tuple 数组 */
 const compactLaps = (
-    laps: ActivityLap[]
+    laps: ActivityLap[],
+    isRunning: boolean
 ): NonNullable<ActivityDetailSummary['laps']> => {
     const data: NonNullable<ActivityDetailSummary['laps']>['data'] = [];
     for (const lap of laps) {
@@ -275,7 +277,9 @@ const compactLaps = (
         );
         const avgHr = roundNumber(lap.averageHR);
         const maxHr = roundNumber(lap.maxHR);
-        const avgCadence = roundNumber(lap.averageRunCadence);
+        const avgCadence = isRunning
+            ? fullRunningCadence(lap.averageRunCadence)
+            : roundNumber(lap.averageRunCadence);
         const elevGainM = roundNumber(lap.elevationGain);
         const strideCm = roundNumber(lap.strideLength);
         const vertOscCm = roundNumber(lap.verticalOscillation, 1);
@@ -487,15 +491,112 @@ const buildActivitiesAiHints = (activities: CompactActivity[]): string[] => {
 const detailSummary = (detail: LooseRecord): LooseRecord =>
     detail.summaryDTO ?? detail;
 
-const buildDetailRunForm = (summary: LooseRecord) => ({
-    cadence: roundNumber(summary.averageRunCadence),
-    maxCadence: roundNumber(summary.maxRunCadence),
+const buildDetailRunForm = (summary: LooseRecord, isRunning: boolean) => ({
+    cadence: isRunning
+        ? fullRunningCadence(summary.averageRunCadence)
+        : roundNumber(summary.averageRunCadence),
+    maxCadence: isRunning
+        ? fullRunningCadence(summary.maxRunCadence)
+        : roundNumber(summary.maxRunCadence),
     strideCm: roundNumber(summary.strideLength),
     gctMs: roundNumber(summary.groundContactTime),
     gctBalanceLeft: roundNumber(summary.groundContactBalanceLeft, 1),
     verticalOscCm: roundNumber(summary.verticalOscillation, 1),
     verticalRatio: roundNumber(summary.verticalRatio, 1)
 });
+
+const orthogonalDistance = (
+    point: [number, number],
+    start: [number, number],
+    end: [number, number]
+): number => {
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    if (dx === 0 && dy === 0) {
+        return Math.hypot(point[0] - start[0], point[1] - start[1]);
+    }
+    const ratio = Math.max(
+        0,
+        Math.min(
+            1,
+            ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) /
+                (dx * dx + dy * dy)
+        )
+    );
+    return Math.hypot(
+        point[0] - (start[0] + ratio * dx),
+        point[1] - (start[1] + ratio * dy)
+    );
+};
+
+const simplifyRoute = (
+    points: Array<[number, number]>,
+    epsilon: number
+): Array<[number, number]> => {
+    if (points.length <= 2) return points;
+    let maxDistance = 0;
+    let splitIndex = 0;
+    for (let index = 1; index < points.length - 1; index += 1) {
+        const distance = orthogonalDistance(
+            points[index],
+            points[0],
+            points[points.length - 1]
+        );
+        if (distance > maxDistance) {
+            maxDistance = distance;
+            splitIndex = index;
+        }
+    }
+    if (maxDistance <= epsilon) {
+        return [points[0], points[points.length - 1]];
+    }
+    const left = simplifyRoute(points.slice(0, splitIndex + 1), epsilon);
+    const right = simplifyRoute(points.slice(splitIndex), epsilon);
+    return left.slice(0, -1).concat(right);
+};
+
+export const buildRoutePreview = (
+    geoPoints: Array<[number, number]>
+): NonNullable<ActivityDetailSummary['routePreview']> | undefined => {
+    if (geoPoints.length < 2) return undefined;
+    const latitudes = geoPoints.map(([latitude]) => latitude);
+    const longitudes = geoPoints.map(([, longitude]) => longitude);
+    const minLatitude = Math.min(...latitudes);
+    const maxLatitude = Math.max(...latitudes);
+    const minLongitude = Math.min(...longitudes);
+    const maxLongitude = Math.max(...longitudes);
+    const latitudeSpan = maxLatitude - minLatitude;
+    const longitudeSpan = maxLongitude - minLongitude;
+    const maxSpan = Math.max(latitudeSpan, longitudeSpan);
+    if (maxSpan === 0) return undefined;
+
+    const xOffset = (1 - longitudeSpan / maxSpan) / 2;
+    const yOffset = (1 - latitudeSpan / maxSpan) / 2;
+    const normalized = geoPoints.map(
+        ([latitude, longitude]): [number, number] => [
+            round((longitude - minLongitude) / maxSpan + xOffset, 4)!,
+            round(1 - ((latitude - minLatitude) / maxSpan + yOffset), 4)!
+        ]
+    );
+    if (normalized.length <= 300) {
+        return { points: normalized, simplified: true };
+    }
+
+    let lower = 0;
+    let upper = 0.5;
+    let best = normalized;
+    for (let iteration = 0; iteration < 15; iteration += 1) {
+        const epsilon = (lower + upper) / 2;
+        const simplified = simplifyRoute(normalized, epsilon);
+        if (simplified.length > 300) {
+            lower = epsilon;
+        } else {
+            best = simplified;
+            upper = epsilon;
+        }
+    }
+    return { points: best, simplified: true };
+};
 
 /** 将课表 steps 展开为平铺的步骤列表（解析 REPEAT 控制步骤） */
 const compactWorkout = (
@@ -761,7 +862,10 @@ export const buildActivityDetailSummary = async (
             label: effect.label,
             load: roundNumber(summary.activityTrainingLoad),
             bodyBatteryDelta: roundNumber(summary.differenceBodyBattery),
-            runForm: buildDetailRunForm(summary),
+            runForm: buildDetailRunForm(
+                summary,
+                primarySport(detail) === 'running'
+            ),
             movementBreakdown: buildMovementBreakdown(detail),
             summaryStats: {
                 distanceKm: roundNumber(summary.distance / 1000, 2),
@@ -815,8 +919,8 @@ export const buildActivityDetailSummary = async (
         };
     })();
 
-    // 再并行获取 laps、天气、课表
-    const [lapsRes, weatherRaw, workoutsRaw] = await Promise.all([
+    // 再并行获取 laps、天气、课表、轨迹详情
+    const [lapsRes, weatherRaw, workoutsRaw, detailsRaw] = await Promise.all([
         api
             .getActivityLaps({ activityId: options.activityId })
             .catch(() => null),
@@ -825,15 +929,35 @@ export const buildActivityDetailSummary = async (
             .catch(() => null),
         api
             .getActivityWorkouts({ activityId: options.activityId })
+            .catch(() => null),
+        api
+            .getActivityDetails({ activityId: options.activityId })
             .catch(() => null)
     ]);
 
     const lapList = lapsRes as { lapDTOs: ActivityLap[] } | null;
     const laps = lapList?.lapDTOs?.length
-        ? compactLaps(lapList.lapDTOs)
+        ? compactLaps(lapList.lapDTOs, detailData.sport === 'running')
         : undefined;
     const workoutData = workoutsRaw as ActivityWorkout[] | null;
     const workout = compactWorkout(workoutData ?? []);
+
+    const rawPolyline = detailsRaw?.geoPolylineDTO?.polyline;
+    const geoPoints: [number, number][] = Array.isArray(rawPolyline)
+        ? rawPolyline
+              .map((point) => {
+                  if (
+                      point.valid !== false &&
+                      typeof point.lat === 'number' &&
+                      typeof point.lon === 'number'
+                  ) {
+                      return [point.lat, point.lon] as [number, number];
+                  }
+                  return null;
+              })
+              .filter((point): point is [number, number] => point !== null)
+        : [];
+    const routePreview = buildRoutePreview(geoPoints);
 
     // 天气：华氏度→摄氏度
     const weatherRaw2 = weatherRaw as ActivityWeather | null;
@@ -884,6 +1008,7 @@ export const buildActivityDetailSummary = async (
     if (laps) result.laps = laps;
     if (workout) result.workout = workout;
     if (weather) result.weather = weather;
+    if (routePreview) result.routePreview = routePreview;
 
     result.aiHints = buildDetailAiHints(
         detailData.label,

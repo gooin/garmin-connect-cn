@@ -10,6 +10,7 @@ import {
     ActivityWeather,
     ActivityWorkout,
     ExportFileTypeValue,
+    IActivityChartDetails,
     ICountActivities,
     IDailyStepsType
 } from '../../types';
@@ -113,6 +114,21 @@ export function applyActivityBaseModule(Base: ModuleConstructor) {
             if (!activity.activityId) throw new Error('Missing activityId');
             return this.client.get<IActivity>(
                 this.url.ACTIVITY + activity.activityId
+            );
+        }
+
+        async getActivityDetails(activity: {
+            activityId: GCActivityId;
+        }): Promise<IActivityChartDetails> {
+            if (!activity.activityId) throw new Error('Missing activityId');
+            return this.client.get<IActivityChartDetails>(
+                this.url.ACTIVITY + activity.activityId + '/details',
+                {
+                    params: {
+                        maxChartSize: 2000,
+                        maxPolylineSize: 4000
+                    }
+                }
             );
         }
 

@@ -6,6 +6,7 @@ import {
     BodyBatteryDailyEntry,
     CyclingAbility,
     IActivity,
+    IActivityChartDetails,
     MaxMetResponse,
     PowerCurveResponse,
     PowerToWeightEntry,
@@ -87,6 +88,9 @@ export type CoachApi = {
         search?: string
     ): Promise<IActivity[]>;
     getActivity(activity: { activityId: number }): Promise<IActivity>;
+    getActivityDetails(activity: {
+        activityId: number;
+    }): Promise<IActivityChartDetails>;
     getCyclingAbility: () => Promise<CyclingAbility | null>;
     getHRVData: (date?: Date) => Promise<HRVData>;
     getHRVDailySummary: (
@@ -290,6 +294,14 @@ export const round = (
     return Math.round(value * factor) / factor;
 };
 
+export const fullRunningCadence = (
+    value: number | null | undefined
+): number | null => {
+    const rounded = round(value);
+    if (rounded === null) return null;
+    return rounded > 0 && rounded < 120 ? rounded * 2 : rounded;
+};
+
 export const lowerSnake = (value: string | null | undefined): string | null =>
     value ? value.toLowerCase() : null;
 
@@ -315,6 +327,7 @@ export const normalizeStatus = (
         return phrase.split('_')[0].toLowerCase();
     }
     const statusMap: Record<number, string> = {
+        1: 'detraining',
         2: 'unproductive',
         3: 'overreaching',
         4: 'maintaining',
@@ -324,6 +337,29 @@ export const normalizeStatus = (
         8: 'strained'
     };
     return typeof status === 'number' ? statusMap[status] ?? null : null;
+};
+
+export const TRAINING_STATUS_ZH: Record<string, string> = {
+    detraining: '训练不足',
+    unproductive: '效率不佳',
+    overreaching: '过度训练',
+    maintaining: '维持效果',
+    recovery: '恢复',
+    peaking: '巅峰状态',
+    productive: '高效训练',
+    strained: '紧绷'
+};
+
+/**
+ * Garmin feedback phrases may include variants such as PRODUCTIVE_3 or
+ * MAINTAINING_AER_HIGH_SHORT. The stable prefix owns the Chinese label.
+ */
+export const normalizeStatusZh = (
+    status: string | number | null | undefined,
+    phrase?: string | null
+): string | null => {
+    const normalized = normalizeStatus(status, phrase);
+    return normalized ? TRAINING_STATUS_ZH[normalized] ?? null : null;
 };
 
 export const normalizeTrend = (

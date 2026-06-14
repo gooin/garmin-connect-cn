@@ -547,6 +547,65 @@ GCClient.addRunningWorkout('My 5k run', 5000, 'Some description');
 
 Will add a running workout of 5km called 'My 5k run' and return a JSON object representing the saved workout.
 
+### Compile an AI coach workout draft
+
+Use `workout_draft_v1` as a transport-neutral, metric input. The compiler
+validates the draft and converts user-readable values to Garmin workout fields.
+Compilation does not write to Garmin.
+
+```ts
+import { compileWorkoutDraft, type WorkoutDraft } from '@gooin/garmin-connect';
+
+const draft: WorkoutDraft = {
+    schema: 'workout_draft_v1',
+    sport: 'running',
+    name: '4 x 1 km threshold',
+    estimatedDurationSec: 3600,
+    steps: [
+        {
+            type: 'step',
+            stepType: 'warmup',
+            duration: { type: 'time', seconds: 600 }
+        },
+        {
+            type: 'repeat',
+            iterations: 4,
+            steps: [
+                {
+                    type: 'step',
+                    stepType: 'interval',
+                    duration: { type: 'distance', meters: 1000 },
+                    target: {
+                        type: 'pace',
+                        fastestSecPerKm: 270,
+                        slowestSecPerKm: 285
+                    }
+                },
+                {
+                    type: 'step',
+                    stepType: 'recovery',
+                    duration: { type: 'time', seconds: 120 }
+                }
+            ]
+        },
+        {
+            type: 'step',
+            stepType: 'cooldown',
+            duration: { type: 'time', seconds: 600 }
+        }
+    ]
+};
+
+const payload = compileWorkoutDraft(draft);
+
+// Execute these write operations only after explicit user confirmation.
+const workout = await GCClient.addWorkout(payload);
+await GCClient.scheduleWorkout(
+    { workoutId: String(workout.workoutId) },
+    new Date('2026-06-16')
+);
+```
+
 ### Schedule workout
 
 To add a workout to your calendar, first find your workout and then add it to a specific date.
