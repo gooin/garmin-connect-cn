@@ -38,6 +38,7 @@ const USER_AGENT_BROWSER_MAC =
 // URL常量
 const OAUTH_CONSUMER_URL =
     'https://thegarth.s3.amazonaws.com/oauth_consumer.json';
+const OAUTH_CONSUMER_URL_CN = 'https://cos.dailysync.cn/oauth_consumer.json';
 
 // HTTP状态码常量
 const HTTP_STATUS = {
@@ -212,13 +213,30 @@ export class HttpClient {
 
     /**
      * 获取OAuth消费者信息
+     * 优先请求主 URL（海外），失败时（可能因为网络/墙）回退到国内备份 URL
      */
     async fetchOauthConsumer(): Promise<void> {
-        const response = await axios.get(OAUTH_CONSUMER_URL);
-        this.OAUTH_CONSUMER = {
-            key: response.data.consumer_key,
-            secret: response.data.consumer_secret
-        };
+        const urls = [OAUTH_CONSUMER_URL, OAUTH_CONSUMER_URL_CN];
+        let lastError: unknown;
+        for (const url of urls) {
+            try {
+                const response = await axios.get(url);
+                this.OAUTH_CONSUMER = {
+                    key: response.data.consumer_key,
+                    secret: response.data.consumer_secret
+                };
+                return;
+            } catch (error) {
+                lastError = error;
+                console.warn(
+                    `[fetchOauthConsumer] 请求失败，尝试下一个 URL: ${url}`,
+                    error instanceof Error ? error.message : error
+                );
+            }
+        }
+        throw lastError instanceof Error
+            ? lastError
+            : new Error('Failed to fetch OAuth consumer from all URLs');
     }
 
     /**
