@@ -37,6 +37,46 @@ const buildFitbitWeightCsvRow = (weight: DateWeight): string => {
     return values.map(escapeCsvValue).join(',');
 };
 
+/**
+ * 展开范围内的全部称重记录。
+ * 体重秤用户一天可能称多次，只有 allWeightMetrics 含当天全部记录；
+ * 只看 latestWeight 会把当天其余称重丢掉。
+ */
+export function collectWeightEntries(
+    weightData: WeightRangeData
+): DateWeight[] {
+    const entries: DateWeight[] = [];
+    for (const summary of weightData.dailyWeightSummaries ?? []) {
+        const metrics = summary.allWeightMetrics?.length
+            ? summary.allWeightMetrics
+            : summary.latestWeight
+            ? [summary.latestWeight]
+            : [];
+        entries.push(...metrics);
+    }
+    return entries;
+}
+
+/**
+ * 生成 Fitbit 体重 CSV。
+ * 只导出 weight/bmi/bodyFat 齐全的记录：Garmin 导入对体脂为空的行走不通，
+ * 手动录入且未填体脂的记录需要改用 updateWeight() 逐条补写。
+ */
+export function buildFitbitWeightCsvFromEntries(entries: DateWeight[]): string {
+    const rows = entries
+        .filter(
+            (weight): weight is DateWeight =>
+                Boolean(weight) &&
+                typeof weight.weight === 'number' &&
+                typeof weight.bmi === 'number' &&
+                typeof weight.bodyFat === 'number'
+        )
+        .sort((a, b) => a.calendarDate.localeCompare(b.calendarDate))
+        .map(buildFitbitWeightCsvRow);
+
+    return ['身体', '日期,体重,身体质量指数 BMI,脂肪', ...rows].join('\n');
+}
+
 export function applyWeightModule(Base: ModuleConstructor) {
     return class WeightModule extends Base {
         async getDailyWeightData(date = new Date()): Promise<WeightData> {
@@ -99,20 +139,8 @@ export function applyWeightModule(Base: ModuleConstructor) {
         }
 
         buildFitbitWeightCsv(weightData: WeightRangeData): string {
-            const rows = (weightData.dailyWeightSummaries ?? [])
-                .map((summary) => summary.latestWeight)
-                .filter(
-                    (weight): weight is DateWeight =>
-                        Boolean(weight) &&
-                        typeof weight.weight === 'number' &&
-                        typeof weight.bmi === 'number' &&
-                        typeof weight.bodyFat === 'number'
-                )
-                .sort((a, b) => a.calendarDate.localeCompare(b.calendarDate))
-                .map(buildFitbitWeightCsvRow);
-
-            return ['身体', '日期,体重,身体质量指数 BMI,脂肪', ...rows].join(
-                '\n'
+            return buildFitbitWeightCsvFromEntries(
+                collectWeightEntries(weightData)
             );
         }
 
