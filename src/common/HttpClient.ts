@@ -8,6 +8,7 @@ import _ from 'lodash';
 import { DateTime } from 'luxon';
 import OAuth from 'oauth-1.0a';
 import qs from 'qs';
+import { maskMfaCode } from './maskMfaCode';
 import { MFAManager } from './MFAManager';
 import { UrlClass } from '../garmin/UrlClass';
 import {
@@ -413,7 +414,7 @@ export class HttpClient {
                 const mfaCode = await this.mfaManager.waitForMFACode(sessionId);
                 console.log(
                     '🚀 - getLoginTicket - 收到验证码 mfaCode:',
-                    mfaCode
+                    maskMfaCode(mfaCode)
                 );
 
                 // 使用获取到的验证码完成MFA验证
@@ -606,7 +607,7 @@ export class HttpClient {
 
         // 获取MFA验证码
         const mfaCode = await mfaCallback();
-        console.log('🚀 - handleMFA - mfaCode:', mfaCode);
+        console.log('🚀 - handleMFA - mfaCode:', maskMfaCode(mfaCode));
 
         // 提交MFA验证
         const mfaResult = await this.submitMFACode(

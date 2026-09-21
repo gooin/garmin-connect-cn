@@ -49,7 +49,7 @@ export class MFAManager {
             if (!config) {
                 throw new Error('首次创建MFAManager实例必须提供配置');
             }
-            console.log('创建MFA管理器实例', config);
+            console.log('创建MFA管理器实例: [config redacted]');
             MFAManager.instance = new MFAManager(config);
         }
         return MFAManager.instance;

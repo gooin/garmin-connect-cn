@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { MFASessionStorage } from './MFASessionStorage';
+import { maskMfaCode } from './maskMfaCode';
 
 /**
  * 文件系统实现的MFA会话存储
@@ -149,7 +150,9 @@ export class FileMFASessionStorage implements MFASessionStorage {
                 'utf8'
             );
             console.log(
-                `MFA验证码已提交: code ${code}, sessionId ${sessionId}`
+                `MFA验证码已提交: code ${maskMfaCode(
+                    code
+                )}, sessionId ${sessionId}`
             );
             return true;
         } catch (error) {

@@ -1,4 +1,5 @@
 import { MFASessionStorage } from './MFASessionStorage';
+import { maskMfaCode } from './maskMfaCode';
 
 declare var require: any;
 
@@ -123,7 +124,7 @@ export class RedisMFASessionStorage implements MFASessionStorage {
                         await this.cleanupRequest(sessionId);
                         console.log(
                             '🚀 RedisMFASessionStorage 收到验证码:',
-                            session.code
+                            maskMfaCode(session.code)
                         );
                         resolve(session.code);
                         return;
@@ -200,7 +201,9 @@ export class RedisMFASessionStorage implements MFASessionStorage {
 
             await this.redis.set(sessionKey, JSON.stringify(session));
             console.log(
-                `MFA验证码已提交: code ${code}, sessionId ${sessionId}`
+                `MFA验证码已提交: code ${maskMfaCode(
+                    code
+                )}, sessionId ${sessionId}`
             );
             return true;
         } catch (error) {
